@@ -118,6 +118,14 @@ pom.xml 版本号需与 Docker 镜像版本保持一致。发布新版本时：
 1. 更新 pom.xml 中的 `<version>`
 2. 构建并推送 Docker 镜像时使用相同版本号
 
+**多平台构建**: 生产服务器为 linux/amd64，开发机可能是 arm64 (Mac M系列)。构建镜像时必须使用 `docker buildx` 进行多平台构建：
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t anthooooony/telegram-bangumi-bot:latest \
+  -t anthooooony/telegram-bangumi-bot:<version> \
+  --push .
+```
+
 ## Bangumi API
 
 文档: https://bangumi.github.io/api/

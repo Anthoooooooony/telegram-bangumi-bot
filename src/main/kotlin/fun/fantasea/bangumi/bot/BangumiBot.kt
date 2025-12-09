@@ -21,16 +21,31 @@ import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand
 import org.telegram.telegrambots.meta.generics.TelegramClient
+import okhttp3.OkHttpClient
+import java.net.InetSocketAddress
+import java.net.Proxy
 
 @Component
 class BangumiBot(
     @Value("\${telegram.bot.token}") private val botToken: String,
+    @Value("\${telegram.proxy.host:}") private val proxyHost: String,
+    @Value("\${telegram.proxy.port:0}") private val proxyPort: Int,
     private val userService: UserService,
     private val subscriptionService: SubscriptionService
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(BangumiBot::class.java)
-    private val telegramClient: TelegramClient = OkHttpTelegramClient(botToken)
+    private val telegramClient: TelegramClient = createTelegramClient()
+
+    private fun createTelegramClient(): TelegramClient {
+        if (proxyHost.isNotBlank() && proxyPort > 0) {
+            log.info("使用代理连接 Telegram: {}:{}", proxyHost, proxyPort)
+            val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort))
+            val okHttpClient = OkHttpClient.Builder().proxy(proxy).build()
+            return OkHttpTelegramClient(okHttpClient, botToken)
+        }
+        return OkHttpTelegramClient(botToken)
+    }
     private val scope = CoroutineScope(Dispatchers.IO)
 
     override fun getBotToken(): String = botToken

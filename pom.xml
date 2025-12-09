@@ -13,7 +13,7 @@
 
     <groupId>fun.fantasea</groupId>
     <artifactId>telegram-bangumi-bot</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>telegram-bangumi-bot</name>
     <description>Telegram bot for bangumi episode reminders</description>
 

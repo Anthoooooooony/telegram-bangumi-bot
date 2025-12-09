@@ -13,7 +13,9 @@ class BangumiClientTest {
 
     private val client = BangumiClient(
         baseUrl = "https://api.bgm.tv",
-        userAgent = "telegram-bangumi-bot/1.0 (test)"
+        userAgent = "telegram-bangumi-bot/1.0 (test)",
+        proxyHost = "",
+        proxyPort = 0
     )
 
     @Test

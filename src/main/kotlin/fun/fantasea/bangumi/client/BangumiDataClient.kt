@@ -11,8 +11,11 @@ import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.serialization.jackson.*
+import io.ktor.client.engine.*
+import io.ktor.http.*
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
@@ -23,7 +26,10 @@ import java.util.concurrent.ConcurrentHashMap
  * https://github.com/bangumi-data/bangumi-data
  */
 @Component
-class BangumiDataClient {
+class BangumiDataClient(
+    @Value("\${telegram.proxy.host:}") private val proxyHost: String,
+    @Value("\${telegram.proxy.port:0}") private val proxyPort: Int
+) {
     private val log = LoggerFactory.getLogger(BangumiDataClient::class.java)
 
     private val dataUrl = "https://cdn.jsdelivr.net/npm/bangumi-data@0.3/dist/data.json"
@@ -35,6 +41,11 @@ class BangumiDataClient {
         install(HttpTimeout) {
             requestTimeoutMillis = 60000
             connectTimeoutMillis = 30000
+        }
+        if (proxyHost.isNotBlank() && proxyPort > 0) {
+            engine {
+                proxy = ProxyBuilder.http(Url("http://$proxyHost:$proxyPort"))
+            }
         }
     }
 

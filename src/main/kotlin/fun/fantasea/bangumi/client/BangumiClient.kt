@@ -7,6 +7,7 @@ import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.engine.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.jackson.*
@@ -17,7 +18,9 @@ import org.springframework.stereotype.Component
 @Component
 class BangumiClient(
     @Value("\${bangumi.api.base-url}") private val baseUrl: String,
-    @Value("\${bangumi.api.user-agent}") private val userAgent: String
+    @Value("\${bangumi.api.user-agent}") private val userAgent: String,
+    @Value("\${telegram.proxy.host:}") private val proxyHost: String,
+    @Value("\${telegram.proxy.port:0}") private val proxyPort: Int
 ) {
     private val log = LoggerFactory.getLogger(BangumiClient::class.java)
 
@@ -31,6 +34,11 @@ class BangumiClient(
         }
         defaultRequest {
             header(HttpHeaders.UserAgent, userAgent)
+        }
+        if (proxyHost.isNotBlank() && proxyPort > 0) {
+            engine {
+                proxy = ProxyBuilder.http(Url("http://$proxyHost:$proxyPort"))
+            }
         }
     }
 

@@ -210,4 +210,26 @@ class BangumiBot(
             log.error("发送消息失败: {}", e.message, e)
         }
     }
+
+    /**
+     * 发送 Markdown 格式消息 (使用 MarkdownV2)
+     */
+    fun sendMessageMarkdown(chatId: Long, text: String) {
+        try {
+            val message = SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .parseMode("MarkdownV2")
+                .disableWebPagePreview(true)
+                .build()
+            telegramClient.execute(message)
+        } catch (e: Exception) {
+            log.error("发送 Markdown 消息失败: {}", e.message, e)
+            // 降级为普通消息（去除 Markdown 标记）
+            val plainText = text
+                .replace("\\", "")
+                .replace("*", "")
+            sendMessage(chatId, plainText)
+        }
+    }
 }

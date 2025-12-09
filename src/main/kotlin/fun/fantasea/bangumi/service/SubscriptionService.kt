@@ -6,6 +6,7 @@ import `fun`.fantasea.bangumi.repository.SubscriptionRepository
 import `fun`.fantasea.bangumi.repository.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 /**
@@ -134,14 +135,14 @@ class SubscriptionService(
      */
     private suspend fun getLatestAiredEpisode(subjectId: Int): Int {
         val episodes = bangumiClient.getEpisodes(subjectId)
-        val today = java.time.LocalDate.now()
+        val today = LocalDate.now()
 
         return episodes.data
             .filter { it.type == 0 } // 本篇
             .filter { ep ->
                 val airdate = ep.airdate ?: return@filter false
                 try {
-                    val episodeDate = java.time.LocalDate.parse(airdate)
+                    val episodeDate = LocalDate.parse(airdate)
                     !episodeDate.isAfter(today)
                 } catch (e: Exception) {
                     false

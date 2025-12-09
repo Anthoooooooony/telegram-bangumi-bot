@@ -1,6 +1,7 @@
 package `fun`.fantasea.bangumi.service
 
 import `fun`.fantasea.bangumi.bot.BangumiBot
+import `fun`.fantasea.bangumi.client.BangumiDataClient
 import `fun`.fantasea.bangumi.entity.Subscription
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Lazy
@@ -12,7 +13,8 @@ import org.springframework.stereotype.Service
  */
 @Service
 class NotificationService(
-    @Lazy private val bangumiBot: BangumiBot
+    @Lazy private val bangumiBot: BangumiBot,
+    private val bangumiDataClient: BangumiDataClient
 ) {
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
 
@@ -28,15 +30,50 @@ class NotificationService(
         val animeName = subscription.subjectNameCn?.takeIf { it.isNotBlank() } ?: subscription.subjectName
         val epInfo = episodeName?.takeIf { it.isNotBlank() }?.let { " - $it" } ?: ""
 
-        val message = """
-            新剧集更新！
+        // 获取播放平台链接
+        val platformLinks = bangumiDataClient.generatePlatformLinks(subscription.subjectId)
+        val linksLine = platformLinks?.let { "\n\n直达链接：$it" } ?: ""
 
-            $animeName
-            第 $episodeNumber 集$epInfo
+        // 转义 Markdown 特殊字符（番剧名称和剧集名可能包含特殊字符）
+        val safeAnimeName = escapeMarkdown(animeName)
+        val safeEpInfo = escapeMarkdown(epInfo)
+
+        val message = """
+            *新剧集更新！*
+
+            $safeAnimeName
+            第 $episodeNumber 集$safeEpInfo$linksLine
         """.trimIndent()
 
         log.info("发送新剧集通知: telegramId={}, anime={}, ep={}", telegramId, animeName, episodeNumber)
-        bangumiBot.sendMessage(telegramId, message)
+        bangumiBot.sendMessageMarkdown(telegramId, message)
+    }
+
+    /**
+     * 转义 Markdown 特殊字符
+     * 注意：链接中的字符不需要转义，所以只对文本内容调用此方法
+     */
+    private fun escapeMarkdown(text: String): String {
+        // Telegram Markdown 需要转义的字符: _ * [ ] ( ) ~ ` > # + - = | { } . !
+        return text
+            .replace("_", "\\_")
+            .replace("*", "\\*")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("~", "\\~")
+            .replace("`", "\\`")
+            .replace(">", "\\>")
+            .replace("#", "\\#")
+            .replace("+", "\\+")
+            .replace("-", "\\-")
+            .replace("=", "\\=")
+            .replace("|", "\\|")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
+            .replace(".", "\\.")
+            .replace("!", "\\!")
     }
 
     /**

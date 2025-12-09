@@ -77,14 +77,40 @@ class DailySummaryTask(
         }
     }
 
-    private fun sendSummaryToUser(telegramId: Long, todayAiringIds: Set<Int>) {
+    private suspend fun sendSummaryToUser(telegramId: Long, todayAiringIds: Set<Int>) {
         // 获取用户的订阅
         val subscriptions = subscriptionRepository.findByUserTelegramId(telegramId)
 
         // 筛选出今日有更新的订阅
-        val todayAnimes = subscriptions
-            .filter { it.subjectId in todayAiringIds }
-            .map { TodayAnimeInfo(it.subjectId, it.subjectName, it.subjectNameCn) }
+        val todaySubscriptions = subscriptions.filter { it.subjectId in todayAiringIds }
+        val today = LocalDate.now()
+
+        // 获取封面图和剧集信息
+        val todayAnimes = todaySubscriptions.map { sub ->
+            var coverUrl: String? = null
+            var airInfo: String? = null
+
+            try {
+                // 获取封面
+                coverUrl = bangumiClient.getSubject(sub.subjectId).images?.common
+
+                // 获取剧集信息，找出今日更新的集数
+                val episodes = bangumiClient.getEpisodes(sub.subjectId)
+                val todayEpisode = episodes.data
+                    .filter { it.type == 0 }  // 本篇
+                    .filter { it.airdate == today.toString() }
+                    .maxByOrNull { it.sort }
+
+                if (todayEpisode != null) {
+                    val epNum = todayEpisode.ep?.toInt() ?: todayEpisode.sort.toInt()
+                    airInfo = "第 $epNum 集"
+                }
+            } catch (e: Exception) {
+                log.debug("获取番剧信息失败: subjectId={}, error={}", sub.subjectId, e.message)
+            }
+
+            TodayAnimeInfo(sub.subjectId, sub.subjectName, sub.subjectNameCn, coverUrl, airInfo)
+        }
 
         notificationService.sendDailySummary(telegramId, todayAnimes)
         log.info("已发送每日汇总: telegramId={}, count={}", telegramId, todayAnimes.size)

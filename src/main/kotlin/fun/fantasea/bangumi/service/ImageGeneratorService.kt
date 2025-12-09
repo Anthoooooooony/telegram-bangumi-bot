@@ -26,7 +26,8 @@ class ImageGeneratorService {
         private const val CORNER_RADIUS = 20f
 
         // 颜色定义
-        private val ACCENT_COLOR = Color(255, 107, 107)
+        private val ACCENT_COLOR = Color(255, 107, 107)        // 新剧集通知 - 红色
+        private val SUMMARY_ACCENT_COLOR = Color(100, 180, 255) // 每日汇总 - 蓝色
         private val TEXT_PRIMARY = Color.WHITE
         private val TEXT_SECONDARY = Color(220, 220, 230)
         private val TEXT_MUTED = Color(160, 160, 180)
@@ -201,6 +202,178 @@ class ImageGeneratorService {
     }
 
     /**
+     * 生成每日汇总卡片图片
+     * 每个番剧条目带有封面背景和渐变效果
+     */
+    fun generateDailySummaryCard(animes: List<DailySummaryAnime>): ByteArray {
+        log.debug("生成每日汇总图片: count={}", animes.size)
+
+        // 动态计算卡片高度
+        val headerHeight = 60          // 标题区域
+        val itemHeight = 70            // 每个番剧条目高度（增大以显示封面）
+        val itemGap = 8                // 条目间距
+        val footerHeight = 35          // 底部留白
+        val maxItems = 16               // 最多显示16部
+        val displayCount = minOf(animes.size, maxItems)
+        val cardHeight = headerHeight + displayCount * (itemHeight + itemGap) + footerHeight +
+            if (animes.size > maxItems) 30 else 0
+
+        val image = BufferedImage(CARD_WIDTH, cardHeight, BufferedImage.TYPE_INT_ARGB)
+        val g2d = image.createGraphics()
+
+        try {
+            setupRenderingHints(g2d)
+
+            // 创建圆角裁剪区域
+            val roundRect = RoundRectangle2D.Float(0f, 0f, CARD_WIDTH.toFloat(), cardHeight.toFloat(), CORNER_RADIUS, CORNER_RADIUS)
+            g2d.clip = roundRect
+
+            // 绘制纯色背景
+            g2d.color = FALLBACK_BG
+            g2d.fillRect(0, 0, CARD_WIDTH, cardHeight)
+
+            // 绘制内容
+            drawDailySummaryContent(g2d, animes, cardHeight, maxItems, itemHeight, itemGap, headerHeight)
+
+        } finally {
+            g2d.dispose()
+        }
+
+        val outputStream = ByteArrayOutputStream()
+        ImageIO.write(image, "PNG", outputStream)
+        return outputStream.toByteArray()
+    }
+
+    private fun drawDailySummaryContent(
+        g2d: Graphics2D,
+        animes: List<DailySummaryAnime>,
+        cardHeight: Int,
+        maxItems: Int,
+        itemHeight: Int,
+        itemGap: Int,
+        headerHeight: Int
+    ) {
+        val margin = 15
+        var y = 25
+
+        // 标题行
+        g2d.color = SUMMARY_ACCENT_COLOR
+        g2d.font = getFont(Font.BOLD, 16)
+        g2d.drawString("今日追番更新", margin, y)
+
+        // 数量（右侧）
+        g2d.color = TEXT_MUTED
+        g2d.font = getFont(Font.PLAIN, 14)
+        val countText = "${animes.size} 部"
+        val countWidth = g2d.fontMetrics.stringWidth(countText)
+        g2d.drawString(countText, CARD_WIDTH - margin - countWidth, y)
+
+        y = headerHeight
+
+        // 番剧列表
+        val displayAnimes = animes.take(maxItems)
+
+        displayAnimes.forEachIndexed { index, anime ->
+            drawAnimeItem(g2d, anime, margin, y, CARD_WIDTH - margin * 2, itemHeight, index + 1)
+            y += itemHeight + itemGap
+        }
+
+        // 如果有更多番剧，显示省略提示
+        if (animes.size > maxItems) {
+            g2d.color = TEXT_MUTED
+            g2d.font = getFont(Font.PLAIN, 13)
+            g2d.drawString("... 还有 ${animes.size - maxItems} 部番剧", margin, y + 15)
+        }
+
+        // 时间戳
+        g2d.color = TEXT_MUTED
+        g2d.font = getFont(Font.PLAIN, 11)
+        val timeText = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        val timeWidth = g2d.fontMetrics.stringWidth(timeText)
+        g2d.drawString(timeText, CARD_WIDTH - margin - timeWidth, cardHeight - 12)
+    }
+
+    /**
+     * 绘制单个番剧条目（带封面背景和渐变）
+     */
+    private fun drawAnimeItem(g2d: Graphics2D, anime: DailySummaryAnime, x: Int, y: Int, width: Int, height: Int, index: Int) {
+        val originalClip = g2d.clip
+        val itemRadius = 12f
+
+        // 创建圆角裁剪区域
+        val itemRect = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), itemRadius, itemRadius)
+        g2d.clip = itemRect
+
+        // 尝试绘制封面背景
+        var hasCover = false
+        if (!anime.coverUrl.isNullOrBlank()) {
+            try {
+                val url = URI(anime.coverUrl).toURL()
+                val connection = url.openConnection()
+                connection.setRequestProperty("User-Agent", "telegram-bangumi-bot/1.0")
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                val coverImage = ImageIO.read(connection.getInputStream())
+                if (coverImage != null) {
+                    // Cover 模式：缩放填满条目区域
+                    val scale = maxOf(width.toDouble() / coverImage.width, height.toDouble() / coverImage.height)
+                    val scaledWidth = (coverImage.width * scale).toInt()
+                    val scaledHeight = (coverImage.height * scale).toInt()
+                    val drawX = x + (width - scaledWidth) / 2
+                    val drawY = y + (height - scaledHeight) / 2
+                    g2d.drawImage(coverImage, drawX, drawY, scaledWidth, scaledHeight, null)
+                    hasCover = true
+                }
+            } catch (e: Exception) {
+                log.debug("加载封面图失败: {}", e.message)
+            }
+        }
+
+        // 如果没有封面，使用纯色背景
+        if (!hasCover) {
+            g2d.color = Color(45, 45, 60)
+            g2d.fillRect(x, y, width, height)
+        }
+
+        // 绘制渐变遮罩（从左到右）
+        val overlay = GradientPaint(
+            x.toFloat(), y.toFloat(), Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, 230),
+            (x + width * 0.7f), y.toFloat(), Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, if (hasCover) 100 else 180)
+        )
+        g2d.paint = overlay
+        g2d.fillRect(x, y, width, height)
+
+        // 恢复裁剪区域
+        g2d.clip = originalClip
+
+        // 绘制左侧装饰条
+        g2d.color = SUMMARY_ACCENT_COLOR
+        g2d.fillRoundRect(x, y, 4, height, 4, 4)
+
+        // 绘制序号
+        g2d.color = SUMMARY_ACCENT_COLOR
+        g2d.font = getFont(Font.BOLD, 14)
+        g2d.drawString("$index", x + 14, y + height / 2 + 5)
+
+        // 文字内容区域
+        val textX = x + 40
+        val maxTextWidth = width - 55
+
+        // 绘制番剧名（上半部分）
+        g2d.color = TEXT_PRIMARY
+        g2d.font = getFont(Font.BOLD, 16)
+        val displayName = truncateText(g2d, anime.name, maxTextWidth)
+        g2d.drawString(displayName, textX, y + 28)
+
+        // 绘制更新信息（下半部分）
+        if (!anime.airInfo.isNullOrBlank()) {
+            g2d.color = TEXT_MUTED
+            g2d.font = getFont(Font.PLAIN, 13)
+            g2d.drawString(anime.airInfo, textX, y + 50)
+        }
+    }
+
+    /**
      * 获取字体，使用缓存的中文字体名称
      */
     private fun getFont(style: Int, size: Int): Font {
@@ -223,3 +396,12 @@ class ImageGeneratorService {
         return "$truncated..."
     }
 }
+
+/**
+ * 每日汇总番剧信息
+ */
+data class DailySummaryAnime(
+    val name: String,
+    val coverUrl: String? = null,
+    val airInfo: String? = null  // 更新信息，如 "第 5 集" 或 "今日更新"
+)

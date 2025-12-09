@@ -168,19 +168,40 @@ class NotificationService(
      */
     fun sendDailySummary(telegramId: Long, todayAnimes: List<TodayAnimeInfo>) {
         if (todayAnimes.isEmpty()) {
-            val message = "今日没有追番更新。"
-            bangumiBot.sendMessage(telegramId, message)
+            bangumiBot.sendMessage(telegramId, "今日没有追番更新。")
             return
         }
 
-        val sb = StringBuilder("今日追番更新 (${todayAnimes.size} 部):\n\n")
+        log.info("发送每日汇总: telegramId={}, count={}", telegramId, todayAnimes.size)
 
+        try {
+            // 转换为图片生成需要的格式
+            val animes = todayAnimes.map { anime ->
+                val name = anime.nameCn?.takeIf { it.isNotBlank() } ?: anime.name
+                DailySummaryAnime(name, anime.coverUrl, anime.airInfo)
+            }
+
+            // 生成图片
+            val imageData = imageGeneratorService.generateDailySummaryCard(animes)
+
+            // 发送图片
+            bangumiBot.sendPhoto(telegramId, imageData)
+        } catch (e: Exception) {
+            log.error("生成每日汇总图片失败，降级为文字通知: {}", e.message)
+            // 降级为文字通知
+            sendDailySummaryText(telegramId, todayAnimes)
+        }
+    }
+
+    /**
+     * 发送文字版每日汇总（降级方案）
+     */
+    private fun sendDailySummaryText(telegramId: Long, todayAnimes: List<TodayAnimeInfo>) {
+        val sb = StringBuilder("今日追番更新 (${todayAnimes.size} 部):\n\n")
         todayAnimes.forEachIndexed { index, anime ->
             val name = anime.nameCn?.takeIf { it.isNotBlank() } ?: anime.name
             sb.append("${index + 1}. $name\n")
         }
-
-        log.info("发送每日汇总: telegramId={}, count={}", telegramId, todayAnimes.size)
         bangumiBot.sendMessage(telegramId, sb.toString())
     }
 
@@ -198,7 +219,9 @@ class NotificationService(
 data class TodayAnimeInfo(
     val subjectId: Int,
     val name: String,
-    val nameCn: String?
+    val nameCn: String?,
+    val coverUrl: String? = null,
+    val airInfo: String? = null  // 更新信息，如 "第 5 集"
 )
 
 /**

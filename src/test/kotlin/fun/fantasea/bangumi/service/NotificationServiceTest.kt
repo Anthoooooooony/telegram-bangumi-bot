@@ -159,7 +159,34 @@ class NotificationServiceTest {
     }
 
     @Test
-    fun `should send daily summary`() {
+    fun `should send daily summary as image`() {
+        // given
+        val telegramId = 123456789L
+        val todayAnimes = listOf(
+            TodayAnimeInfo(1, "Anime A", "番剧A"),
+            TodayAnimeInfo(2, "Anime B", null)
+        )
+        val imageData = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
+
+        every {
+            imageGeneratorService.generateDailySummaryCard(match { animes ->
+                animes.size == 2 &&
+                animes[0].name == "番剧A" &&
+                animes[1].name == "Anime B"
+            })
+        } returns imageData
+        every { bangumiBot.sendPhoto(telegramId, imageData) } just Runs
+
+        // when
+        notificationService.sendDailySummary(telegramId, todayAnimes)
+
+        // then
+        verify { bangumiBot.sendPhoto(telegramId, imageData) }
+        verify(exactly = 0) { bangumiBot.sendMessage(any(), any()) }
+    }
+
+    @Test
+    fun `should fallback to text when daily summary image generation fails`() {
         // given
         val telegramId = 123456789L
         val todayAnimes = listOf(
@@ -167,6 +194,7 @@ class NotificationServiceTest {
             TodayAnimeInfo(2, "Anime B", null)
         )
 
+        every { imageGeneratorService.generateDailySummaryCard(any()) } throws RuntimeException("Image generation failed")
         every { bangumiBot.sendMessage(telegramId, any()) } just Runs
 
         // when
@@ -180,6 +208,7 @@ class NotificationServiceTest {
                 it.contains("2. Anime B")
             })
         }
+        verify(exactly = 0) { bangumiBot.sendPhoto(any(), any()) }
     }
 
     @Test

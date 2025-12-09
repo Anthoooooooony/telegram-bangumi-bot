@@ -1,5 +1,8 @@
 package `fun`.fantasea.bangumi.bot
 
+import `fun`.fantasea.bangumi.client.BangumiClient
+import `fun`.fantasea.bangumi.service.ImageGeneratorService
+import `fun`.fantasea.bangumi.service.SubscriptionAnime
 import `fun`.fantasea.bangumi.service.SubscriptionService
 import `fun`.fantasea.bangumi.service.UserService
 import jakarta.annotation.PostConstruct
@@ -31,7 +34,9 @@ class BangumiBot(
     @Value("\${telegram.proxy.host:}") private val proxyHost: String,
     @Value("\${telegram.proxy.port:0}") private val proxyPort: Int,
     private val userService: UserService,
-    private val subscriptionService: SubscriptionService
+    private val subscriptionService: SubscriptionService,
+    private val imageGeneratorService: ImageGeneratorService,
+    private val bangumiClient: BangumiClient
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(BangumiBot::class.java)
@@ -61,7 +66,6 @@ class BangumiBot(
             BotCommand("start", "开始使用"),
             BotCommand("bindtoken", "绑定 Bangumi token"),
             BotCommand("unbind", "解除绑定"),
-            BotCommand("sync", "同步追番列表"),
             BotCommand("list", "显示追番列表"),
             BotCommand("status", "查看绑定状态")
         )
@@ -93,7 +97,6 @@ class BangumiBot(
                 text.startsWith("/start") -> handleStart(chatId, username)
                 text.startsWith("/bindtoken") -> handleBindToken(chatId, userId, text)
                 text.startsWith("/unbind") -> handleUnbind(chatId, userId)
-                text.startsWith("/sync") -> handleSync(chatId, userId)
                 text.startsWith("/list") -> handleList(chatId, userId)
                 text.startsWith("/status") -> handleStatus(chatId, userId)
                 else -> handleUnknown(chatId)
@@ -107,9 +110,8 @@ class BangumiBot(
 
             可用命令:
             /start - 开始使用
-            /bindtoken <token> - 绑定 Bangumi token
+            /bindtoken <token> - 绑定 Bangumi token（自动同步追番列表）
             /unbind - 解除绑定
-            /sync - 同步追番列表
             /list - 显示追番列表
             /status - 查看绑定状态
 
@@ -136,8 +138,16 @@ class BangumiBot(
                     Bangumi 用户: ${result.bangumiUsername}
                     昵称: ${result.bangumiNickname}
 
-                    使用 /sync 同步追番列表
+                    正在同步追番列表...
                 """.trimIndent())
+
+                // 自动同步追番列表
+                val syncResult = subscriptionService.syncSubscriptions(userId)
+                if (syncResult.success) {
+                    sendMessage(chatId, "同步完成！共 ${syncResult.syncedCount} 部在看。\n\n使用 /list 查看追番列表。")
+                } else {
+                    sendMessage(chatId, "同步失败: ${syncResult.error}\n\n请稍后手动重试。")
+                }
             } else {
                 sendMessage(chatId, "绑定失败: ${result.error}")
             }
@@ -153,36 +163,64 @@ class BangumiBot(
         }
     }
 
-    private fun handleSync(chatId: Long, userId: Long) {
-        sendMessage(chatId, "正在同步追番列表...")
-
-        scope.launch {
-            val result = subscriptionService.syncSubscriptions(userId)
-            if (result.success) {
-                sendMessage(chatId, "同步完成！共 ${result.syncedCount} 部在看。\n\n使用 /list 查看追番列表。")
-            } else {
-                sendMessage(chatId, "同步失败: ${result.error}")
-            }
-        }
-    }
-
     private fun handleList(chatId: Long, userId: Long) {
         val subscriptions = subscriptionService.getUserSubscriptions(userId)
 
         if (subscriptions.isEmpty()) {
-            sendMessage(chatId, "追番列表为空。\n\n请先使用 /bindtoken 绑定账号，然后 /sync 同步数据。")
+            sendMessage(chatId, "追番列表为空。\n\n请先使用 /bindtoken 绑定 Bangumi 账号。")
             return
         }
 
-        val sb = StringBuilder("追番列表 (${subscriptions.size} 部):\n\n")
+        sendMessage(chatId, "正在生成追番列表...")
 
-        subscriptions.forEachIndexed { index, sub ->
-            val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
-            val eps = sub.totalEpisodes?.let { " (${it}集)" } ?: ""
-            sb.append("${index + 1}. $name$eps\n")
+        scope.launch {
+            try {
+                val today = java.time.LocalDate.now()
+                // 获取每个订阅的封面图和当前已播出集数
+                val animes = subscriptions.map { sub ->
+                    val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
+                    var coverUrl: String? = null
+                    var latestAiredEp: Int? = null
+
+                    try {
+                        coverUrl = bangumiClient.getSubject(sub.subjectId).images?.common
+                        // 获取已播出的最新集数，使用 ep（本季集数）
+                        val episodes = bangumiClient.getEpisodes(sub.subjectId)
+                        latestAiredEp = episodes.data
+                            .filter { it.type == 0 }
+                            .filter { ep ->
+                                val airdate = ep.airdate ?: return@filter false
+                                try {
+                                    !java.time.LocalDate.parse(airdate).isAfter(today)
+                                } catch (e: Exception) { false }
+                            }
+                            .maxOfOrNull { it.ep?.toInt() ?: it.sort.toInt() }
+                    } catch (e: Exception) {
+                        log.debug("获取番剧信息失败: subjectId={}", sub.subjectId)
+                    }
+
+                    SubscriptionAnime(
+                        name = name,
+                        coverUrl = coverUrl,
+                        totalEpisodes = sub.totalEpisodes,
+                        latestAiredEp = latestAiredEp
+                    )
+                }
+
+                val imageData = imageGeneratorService.generateSubscriptionListCard(animes)
+                sendPhoto(chatId, imageData)
+            } catch (e: Exception) {
+                log.error("生成追番列表图片失败: {}", e.message, e)
+                // 降级为文本输出
+                val sb = StringBuilder("追番列表 (${subscriptions.size} 部):\n\n")
+                subscriptions.forEachIndexed { index, sub ->
+                    val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
+                    val eps = sub.totalEpisodes?.let { " (${it}集)" } ?: ""
+                    sb.append("${index + 1}. $name$eps\n")
+                }
+                sendMessage(chatId, sb.toString())
+            }
         }
-
-        sendMessage(chatId, sb.toString())
     }
 
     private fun handleStatus(chatId: Long, userId: Long) {

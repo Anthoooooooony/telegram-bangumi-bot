@@ -79,11 +79,14 @@ class BangumiClient(
 
     /**
      * 获取剧集列表
+     * @param type 剧集类型: 0=本篇, 1=SP, 2=OP, 3=ED, 4=预告, 5=MAD, 6=其他。null 表示获取所有类型
      */
-    suspend fun getEpisodes(subjectId: Int): EpisodeResponse {
+    suspend fun getEpisodes(subjectId: Int, type: Int? = null): EpisodeResponse {
         log.debug("获取 subject {} 的剧集列表", subjectId)
         return client.get("$baseUrl/v0/episodes") {
             parameter("subject_id", subjectId)
+            parameter("limit", 200) // API 最大值，确保获取所有剧集
+            type?.let { parameter("type", it) }
         }.body()
     }
 

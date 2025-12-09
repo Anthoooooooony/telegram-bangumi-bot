@@ -395,6 +395,178 @@ class ImageGeneratorService {
         }
         return "$truncated..."
     }
+
+    /**
+     * 生成订阅列表卡片图片
+     */
+    fun generateSubscriptionListCard(animes: List<SubscriptionAnime>): ByteArray {
+        log.debug("生成订阅列表图片: count={}", animes.size)
+
+        // 动态计算卡片高度
+        val headerHeight = 60
+        val itemHeight = 70
+        val itemGap = 8
+        val footerHeight = 35
+        val maxItems = 16
+        val displayCount = minOf(animes.size, maxItems)
+        val cardHeight = headerHeight + displayCount * (itemHeight + itemGap) + footerHeight +
+            if (animes.size > maxItems) 30 else 0
+
+        val image = BufferedImage(CARD_WIDTH, cardHeight, BufferedImage.TYPE_INT_ARGB)
+        val g2d = image.createGraphics()
+
+        try {
+            setupRenderingHints(g2d)
+
+            val roundRect = RoundRectangle2D.Float(0f, 0f, CARD_WIDTH.toFloat(), cardHeight.toFloat(), CORNER_RADIUS, CORNER_RADIUS)
+            g2d.clip = roundRect
+
+            g2d.color = FALLBACK_BG
+            g2d.fillRect(0, 0, CARD_WIDTH, cardHeight)
+
+            drawSubscriptionListContent(g2d, animes, cardHeight, maxItems, itemHeight, itemGap, headerHeight)
+
+        } finally {
+            g2d.dispose()
+        }
+
+        val outputStream = ByteArrayOutputStream()
+        ImageIO.write(image, "PNG", outputStream)
+        return outputStream.toByteArray()
+    }
+
+    private fun drawSubscriptionListContent(
+        g2d: Graphics2D,
+        animes: List<SubscriptionAnime>,
+        cardHeight: Int,
+        maxItems: Int,
+        itemHeight: Int,
+        itemGap: Int,
+        headerHeight: Int
+    ) {
+        val margin = 15
+        var y = 25
+
+        // 标题行（使用绿色）
+        val listAccentColor = Color(100, 200, 150)
+        g2d.color = listAccentColor
+        g2d.font = getFont(Font.BOLD, 16)
+        g2d.drawString("追番列表", margin, y)
+
+        // 数量（右侧）
+        g2d.color = TEXT_MUTED
+        g2d.font = getFont(Font.PLAIN, 14)
+        val countText = "${animes.size} 部"
+        val countWidth = g2d.fontMetrics.stringWidth(countText)
+        g2d.drawString(countText, CARD_WIDTH - margin - countWidth, y)
+
+        y = headerHeight
+
+        // 番剧列表
+        val displayAnimes = animes.take(maxItems)
+
+        displayAnimes.forEachIndexed { index, anime ->
+            drawSubscriptionItem(g2d, anime, margin, y, CARD_WIDTH - margin * 2, itemHeight, index + 1, listAccentColor)
+            y += itemHeight + itemGap
+        }
+
+        // 如果有更多番剧，显示省略提示
+        if (animes.size > maxItems) {
+            g2d.color = TEXT_MUTED
+            g2d.font = getFont(Font.PLAIN, 13)
+            g2d.drawString("... 还有 ${animes.size - maxItems} 部番剧", margin, y + 15)
+        }
+
+        // 时间戳
+        g2d.color = TEXT_MUTED
+        g2d.font = getFont(Font.PLAIN, 11)
+        val timeText = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        val timeWidth = g2d.fontMetrics.stringWidth(timeText)
+        g2d.drawString(timeText, CARD_WIDTH - margin - timeWidth, cardHeight - 12)
+    }
+
+    private fun drawSubscriptionItem(g2d: Graphics2D, anime: SubscriptionAnime, x: Int, y: Int, width: Int, height: Int, index: Int, accentColor: Color) {
+        val originalClip = g2d.clip
+        val itemRadius = 12f
+
+        val itemRect = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), itemRadius, itemRadius)
+        g2d.clip = itemRect
+
+        // 尝试绘制封面背景
+        var hasCover = false
+        if (!anime.coverUrl.isNullOrBlank()) {
+            try {
+                val url = URI(anime.coverUrl).toURL()
+                val connection = url.openConnection()
+                connection.setRequestProperty("User-Agent", "telegram-bangumi-bot/1.0")
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                val coverImage = ImageIO.read(connection.getInputStream())
+                if (coverImage != null) {
+                    val scale = maxOf(width.toDouble() / coverImage.width, height.toDouble() / coverImage.height)
+                    val scaledWidth = (coverImage.width * scale).toInt()
+                    val scaledHeight = (coverImage.height * scale).toInt()
+                    val drawX = x + (width - scaledWidth) / 2
+                    val drawY = y + (height - scaledHeight) / 2
+                    g2d.drawImage(coverImage, drawX, drawY, scaledWidth, scaledHeight, null)
+                    hasCover = true
+                }
+            } catch (e: Exception) {
+                log.debug("加载封面图失败: {}", e.message)
+            }
+        }
+
+        if (!hasCover) {
+            g2d.color = Color(45, 45, 60)
+            g2d.fillRect(x, y, width, height)
+        }
+
+        // 渐变遮罩
+        val overlay = GradientPaint(
+            x.toFloat(), y.toFloat(), Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, 230),
+            (x + width * 0.7f), y.toFloat(), Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, if (hasCover) 100 else 180)
+        )
+        g2d.paint = overlay
+        g2d.fillRect(x, y, width, height)
+
+        g2d.clip = originalClip
+
+        // 左侧装饰条
+        g2d.color = accentColor
+        g2d.fillRoundRect(x, y, 4, height, 4, 4)
+
+        // 序号
+        g2d.color = accentColor
+        g2d.font = getFont(Font.BOLD, 14)
+        g2d.drawString("$index", x + 14, y + height / 2 + 5)
+
+        // 文字内容
+        val textX = x + 40
+        val maxTextWidth = width - 55
+
+        // 番剧名
+        g2d.color = TEXT_PRIMARY
+        g2d.font = getFont(Font.BOLD, 16)
+        val displayName = truncateText(g2d, anime.name, maxTextWidth)
+        g2d.drawString(displayName, textX, y + 28)
+
+        // 集数信息：已播出 / 总集数
+        g2d.color = TEXT_MUTED
+        g2d.font = getFont(Font.PLAIN, 13)
+        val epInfo = buildString {
+            if (anime.latestAiredEp != null && anime.latestAiredEp > 0) {
+                append("已播出 ${anime.latestAiredEp} 集")
+                if (anime.totalEpisodes != null && anime.totalEpisodes > 0) {
+                    append(" / 共 ${anime.totalEpisodes} 集")
+                }
+            } else if (anime.totalEpisodes != null && anime.totalEpisodes > 0) {
+                append("共 ${anime.totalEpisodes} 集")
+            }
+        }
+        if (epInfo.isNotEmpty()) {
+            g2d.drawString(epInfo, textX, y + 50)
+        }
+    }
 }
 
 /**
@@ -404,4 +576,14 @@ data class DailySummaryAnime(
     val name: String,
     val coverUrl: String? = null,
     val airInfo: String? = null  // 更新信息，如 "第 5 集" 或 "今日更新"
+)
+
+/**
+ * 订阅列表番剧信息
+ */
+data class SubscriptionAnime(
+    val name: String,
+    val coverUrl: String? = null,
+    val totalEpisodes: Int? = null,  // 总集数
+    val latestAiredEp: Int? = null   // 当前已播出集数（使用 ep 本季集数）
 )

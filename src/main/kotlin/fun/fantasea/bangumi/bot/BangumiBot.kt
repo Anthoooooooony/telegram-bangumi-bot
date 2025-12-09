@@ -302,15 +302,21 @@ class BangumiBot(
 
     /**
      * 发送图片
+     * @param caption 图片说明文字（可选，支持 MarkdownV2 格式）
      */
-    fun sendPhoto(chatId: Long, imageData: ByteArray) {
+    fun sendPhoto(chatId: Long, imageData: ByteArray, caption: String? = null) {
         try {
             val inputStream = ByteArrayInputStream(imageData)
-            val photo = SendPhoto.builder()
+            val photoBuilder = SendPhoto.builder()
                 .chatId(chatId)
                 .photo(InputFile(inputStream, "notification.png"))
-                .build()
-            telegramClient.execute(photo)
+
+            if (!caption.isNullOrBlank()) {
+                photoBuilder.caption(caption)
+                photoBuilder.parseMode("MarkdownV2")
+            }
+
+            telegramClient.execute(photoBuilder.build())
         } catch (e: Exception) {
             log.error("发送图片失败: {}", e.message, e)
         }

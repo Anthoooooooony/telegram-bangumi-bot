@@ -74,12 +74,31 @@ class NotificationService(
                 platforms = platforms
             )
 
-            // 发送图片
-            bangumiBot.sendPhoto(telegramId, imageData)
+            // 生成播放链接作为图片 caption
+            val caption = generatePlatformCaption(platforms)
+
+            // 发送图片（带链接）
+            bangumiBot.sendPhoto(telegramId, imageData, caption)
         } catch (e: Exception) {
             log.error("生成通知图片失败，降级为文字通知: {}", e.message)
             // 降级为文字通知
             sendTextNotification(telegramId, animeName, episodeText, episodeName, subscription.subjectId)
+        }
+    }
+
+    /**
+     * 生成播放平台链接 caption（MarkdownV2 格式）
+     * 格式: [Bilibili](url)｜[动画疯](url)｜...
+     */
+    private fun generatePlatformCaption(platforms: List<`fun`.fantasea.bangumi.client.PlatformInfo>): String? {
+        if (platforms.isEmpty()) return null
+
+        return platforms.joinToString("｜") { platform ->
+            // URL 中的特殊字符需要转义
+            val escapedUrl = platform.url
+                .replace(")", "\\)")
+                .replace("(", "\\(")
+            "[${escapeMarkdown(platform.name)}](${escapedUrl})"
         }
     }
 

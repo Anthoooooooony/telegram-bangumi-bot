@@ -71,13 +71,13 @@ class NotificationServiceTest {
                 platforms = any()
             )
         } returns imageData
-        every { bangumiBot.sendPhoto(telegramId, imageData) } just Runs
+        every { bangumiBot.sendPhoto(telegramId, imageData, any()) } just Runs
 
         // when
         notificationService.sendNewEpisodeNotification(telegramId, subscription, episodes)
 
         // then
-        verify { bangumiBot.sendPhoto(telegramId, imageData) }
+        verify { bangumiBot.sendPhoto(telegramId, imageData, any()) }
     }
 
     @Test
@@ -105,7 +105,7 @@ class NotificationServiceTest {
                 platforms = any()
             )
         } returns imageData
-        every { bangumiBot.sendPhoto(telegramId, imageData) } just Runs
+        every { bangumiBot.sendPhoto(telegramId, imageData, any()) } just Runs
 
         // when
         notificationService.sendNewEpisodeNotification(telegramId, subscription, episodes)
@@ -140,7 +140,7 @@ class NotificationServiceTest {
 
         // then
         verify { bangumiBot.sendMessageMarkdown(telegramId, any()) }
-        verify(exactly = 0) { bangumiBot.sendPhoto(any(), any()) }
+        verify(exactly = 0) { bangumiBot.sendPhoto(any(), any(), any()) }
     }
 
     @Test
@@ -154,7 +154,7 @@ class NotificationServiceTest {
         notificationService.sendNewEpisodeNotification(telegramId, subscription, episodes)
 
         // then
-        verify(exactly = 0) { bangumiBot.sendPhoto(any(), any()) }
+        verify(exactly = 0) { bangumiBot.sendPhoto(any(), any(), any()) }
         verify(exactly = 0) { bangumiBot.sendMessageMarkdown(any(), any()) }
     }
 
@@ -175,13 +175,13 @@ class NotificationServiceTest {
                 animes[1].name == "Anime B"
             })
         } returns imageData
-        every { bangumiBot.sendPhoto(telegramId, imageData) } just Runs
+        every { bangumiBot.sendPhoto(telegramId, imageData, any()) } just Runs
 
         // when
         notificationService.sendDailySummary(telegramId, todayAnimes)
 
         // then
-        verify { bangumiBot.sendPhoto(telegramId, imageData) }
+        verify { bangumiBot.sendPhoto(telegramId, imageData, any()) }
         verify(exactly = 0) { bangumiBot.sendMessage(any(), any()) }
     }
 
@@ -208,7 +208,7 @@ class NotificationServiceTest {
                 it.contains("2. Anime B")
             })
         }
-        verify(exactly = 0) { bangumiBot.sendPhoto(any(), any()) }
+        verify(exactly = 0) { bangumiBot.sendPhoto(any(), any(), any()) }
     }
 
     @Test

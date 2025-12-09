@@ -11,6 +11,8 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.LocalDate
 import java.time.LocalTime
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 每日汇总定时任务
@@ -25,9 +27,9 @@ class DailySummaryTask(
 ) {
     private val log = LoggerFactory.getLogger(DailySummaryTask::class.java)
 
-    // 记录今日已发送汇总的用户，避免重复发送
-    private val sentToday = mutableSetOf<Long>()
-    private var lastResetDate: LocalDate = LocalDate.now()
+    // 记录今日已发送汇总的用户，避免重复发送（线程安全）
+    private val sentToday: MutableSet<Long> = ConcurrentHashMap.newKeySet()
+    private val lastResetDate = AtomicReference(LocalDate.now())
 
     /**
      * 每分钟检查是否需要发送每日汇总
@@ -37,10 +39,10 @@ class DailySummaryTask(
         val now = LocalTime.now()
         val today = LocalDate.now()
 
-        // 如果日期变化，重置已发送列表
-        if (today != lastResetDate) {
+        // 如果日期变化，重置已发送列表（使用 CAS 保证线程安全）
+        val previousDate = lastResetDate.get()
+        if (today != previousDate && lastResetDate.compareAndSet(previousDate, today)) {
             sentToday.clear()
-            lastResetDate = today
         }
 
         // 获取所有启用每日汇总的用户

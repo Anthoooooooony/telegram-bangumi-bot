@@ -105,6 +105,7 @@ docker-compose logs -f app
 3. 实现功能代码
 4. 运行测试确认通过
 5. 重构优化
+6. 如有需要，更新 CLAUDE.md
 
 提交前必须确保 `mvn test` 全部通过
 
@@ -121,7 +122,3 @@ docker-compose logs -f app
 | `GET /v0/users/{username}/collections` | 获取用户追番列表 |
 | `GET /v0/episodes?subject_id=X` | 获取剧集列表 |
 | `GET /calendar` | 每日放送表 |
-
-## 待办功能
-
-- 推送消息从文字改为图片（模板生成）

@@ -38,6 +38,9 @@ class BangumiDataClient {
         }
     }
 
+    // 复用 ObjectMapper 实例
+    private val objectMapper = jacksonObjectMapper()
+
     // 缓存：Bangumi ID -> 播放平台列表
     private val platformCache = ConcurrentHashMap<String, List<PlatformInfo>>()
 
@@ -63,8 +66,7 @@ class BangumiDataClient {
                 client.get(dataUrl).body<String>()
             }
 
-            val mapper = jacksonObjectMapper()
-            val data: BangumiData = mapper.readValue(jsonText)
+            val data: BangumiData = objectMapper.readValue(jsonText)
 
             siteMeta = data.siteMeta
 

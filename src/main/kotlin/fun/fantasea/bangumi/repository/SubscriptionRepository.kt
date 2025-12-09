@@ -8,11 +8,7 @@ import org.springframework.stereotype.Repository
 @Repository
 interface SubscriptionRepository : JpaRepository<Subscription, Long> {
 
-    fun findByUser(user: User): List<Subscription>
-
     fun findByUserAndSubjectId(user: User, subjectId: Int): Subscription?
 
     fun findByUserTelegramId(telegramId: Long): List<Subscription>
-
-    fun deleteByUser(user: User)
 }

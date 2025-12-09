@@ -24,6 +24,5 @@ class BangumiClientTest {
         // then
         assertEquals(7, calendar.size, "应该有7天的放送表")
         assertTrue(calendar.all { it.weekday.id in 1..7 }, "weekday id 应该在 1-7 之间")
-        println("今日放送: ${calendar.find { it.weekday.id == java.time.LocalDate.now().dayOfWeek.value }?.items?.size ?: 0} 部")
     }
 }

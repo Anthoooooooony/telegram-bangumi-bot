@@ -32,6 +32,25 @@ class ImageGeneratorService {
         private val TEXT_MUTED = Color(160, 160, 180)
         private val OVERLAY_DARK = Color(20, 20, 30)
         private val FALLBACK_BG = Color(30, 30, 45)
+
+        // 优先使用的中文字体列表
+        private val PREFERRED_FONTS = listOf(
+            "Microsoft YaHei",      // Windows
+            "PingFang SC",          // macOS
+            "Noto Sans CJK SC",     // Linux
+            "WenQuanYi Micro Hei",  // Linux
+            "Source Han Sans SC",   // Adobe
+            "Hiragino Sans GB",     // macOS
+            "SimHei",               // Windows fallback
+            "SansSerif"             // 最终 fallback
+        )
+    }
+
+    // 缓存可用的字体名称，避免每次调用都扫描系统字体
+    private val cachedFontName: String by lazy {
+        val availableFonts = GraphicsEnvironment.getLocalGraphicsEnvironment()
+            .availableFontFamilyNames.toSet()
+        PREFERRED_FONTS.firstOrNull { it in availableFonts } ?: "SansSerif"
     }
 
     /**
@@ -182,23 +201,10 @@ class ImageGeneratorService {
     }
 
     /**
-     * 获取字体，优先使用系统中文字体
+     * 获取字体，使用缓存的中文字体名称
      */
     private fun getFont(style: Int, size: Int): Font {
-        val fontNames = listOf(
-            "Microsoft YaHei",      // Windows
-            "PingFang SC",          // macOS
-            "Noto Sans CJK SC",     // Linux
-            "WenQuanYi Micro Hei",  // Linux
-            "Source Han Sans SC",   // Adobe
-            "Hiragino Sans GB",     // macOS
-            "SimHei",               // Windows fallback
-            "SansSerif"             // 最终 fallback
-        )
-
-        val availableFonts = GraphicsEnvironment.getLocalGraphicsEnvironment().availableFontFamilyNames.toSet()
-        val fontName = fontNames.firstOrNull { it in availableFonts } ?: "SansSerif"
-        return Font(fontName, style, size)
+        return Font(cachedFontName, style, size)
     }
 
     /**

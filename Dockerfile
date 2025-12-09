@@ -28,8 +28,8 @@ USER app
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
+    CMD wget -q --spider http://localhost:55555/actuator/health || exit 1
 
-EXPOSE 8080
+EXPOSE 55555
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

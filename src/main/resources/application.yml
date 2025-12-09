@@ -1,3 +1,6 @@
+server:
+  port: ${SERVER_PORT:55555}
+
 spring:
   application:
     name: telegram-bangumi-bot

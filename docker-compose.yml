@@ -13,8 +13,6 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-this-in-production}
       TZ: Asia/Shanghai
-    ports:
-      - "8080:8080"
     networks:
       - bangumi-net
 

@@ -1,15 +1,16 @@
+# syntax=docker/dockerfile:1
 # 构建阶段
 FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 
 WORKDIR /app
 
-# 复制 pom.xml 并下载依赖（利用 Docker 缓存）
+# 复制 pom.xml 并下载依赖（利用 BuildKit 缓存）
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
+RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline -B
 
 # 复制源码并构建
 COPY src ./src
-RUN mvn package -DskipTests -B
+RUN --mount=type=cache,target=/root/.m2 mvn package -DskipTests -B
 
 # 运行阶段
 FROM eclipse-temurin:21-jre-alpine

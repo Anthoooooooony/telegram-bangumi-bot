@@ -58,10 +58,9 @@ docker-compose logs -f app
 - `BangumiDataClient`: 每日 4:00 从 bangumi-data CDN 刷新播放平台数据
 
 **核心流程**:
-1. 用户通过 `/bindtoken` 绑定 Bangumi Token
-2. `/sync` 同步"在看"列表到 `subscriptions` 表
-3. 定时任务检查 Bangumi API 的剧集播出日期
-4. 对比 `subscription.lastNotifiedEp`，有新集则推送 Telegram 消息
+1. 用户通过 `/bindtoken` 绑定 Bangumi Token（绑定后自动同步追番列表）
+2. 定时任务检查 Bangumi API 的剧集播出日期
+3. 对比 `subscription.lastNotifiedEp`，有新集则推送 Telegram 消息
 
 ## 关键实现细节
 
@@ -108,6 +107,12 @@ docker-compose logs -f app
 6. 如有需要，更新 CLAUDE.md
 
 提交前必须确保 `mvn test` 全部通过
+
+## 版本管理
+
+pom.xml 版本号需与 Docker 镜像版本保持一致。发布新版本时：
+1. 更新 pom.xml 中的 `<version>`
+2. 构建并推送 Docker 镜像时使用相同版本号
 
 ## Bangumi API
 

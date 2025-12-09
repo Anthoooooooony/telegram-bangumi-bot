@@ -57,7 +57,9 @@ class SubscriptionService(
                 val subject = item.subject ?: continue
 
                 // 查找或创建订阅
-                val subscription = subscriptionRepository.findByUserAndSubjectId(user, item.subjectId)
+                val existingSubscription = subscriptionRepository.findByUserAndSubjectId(user, item.subjectId)
+                val isNewSubscription = existingSubscription == null
+                val subscription = existingSubscription
                     ?: Subscription(user = user, subjectId = item.subjectId, subjectName = subject.name)
 
                 // 更新信息
@@ -65,6 +67,18 @@ class SubscriptionService(
                 subscription.subjectNameCn = subject.nameCn
                 subscription.totalEpisodes = subject.eps
                 subscription.updatedAt = LocalDateTime.now()
+
+                // 新订阅时，初始化 lastNotifiedEp 为当前已播出的最新集数，避免推送历史剧集
+                if (isNewSubscription) {
+                    try {
+                        val latestAiredEp = getLatestAiredEpisode(item.subjectId)
+                        subscription.lastNotifiedEp = latestAiredEp
+                        subscription.latestAiredEp = latestAiredEp
+                        log.debug("新订阅 {} 初始化 lastNotifiedEp 为 {}", subject.name, latestAiredEp)
+                    } catch (e: Exception) {
+                        log.warn("获取 {} 剧集信息失败: {}", subject.name, e.message)
+                    }
+                }
 
                 subscriptionRepository.save(subscription)
                 syncedCount++
@@ -113,6 +127,27 @@ class SubscriptionService(
             subscription.updatedAt = LocalDateTime.now()
             subscriptionRepository.save(subscription)
         }
+    }
+
+    /**
+     * 获取番剧当前已播出的最新集数
+     */
+    private suspend fun getLatestAiredEpisode(subjectId: Int): Int {
+        val episodes = bangumiClient.getEpisodes(subjectId)
+        val today = java.time.LocalDate.now()
+
+        return episodes.data
+            .filter { it.type == 0 } // 本篇
+            .filter { ep ->
+                val airdate = ep.airdate ?: return@filter false
+                try {
+                    val episodeDate = java.time.LocalDate.parse(airdate)
+                    !episodeDate.isAfter(today)
+                } catch (e: Exception) {
+                    false
+                }
+            }
+            .maxOfOrNull { it.sort.toInt() } ?: 0
     }
 }
 

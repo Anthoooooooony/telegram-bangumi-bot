@@ -77,12 +77,12 @@ class EpisodeCheckerTask(
             val lastNotified = subscription.lastNotifiedEp
 
             if (latestAiredEp > lastNotified) {
-                // 有新剧集，发送通知
-                val newEpisodes = airedEpisodes.filter { it.sort.toInt() > lastNotified }
-
-                for (ep in newEpisodes) {
-                    val epNumber = ep.sort.toInt()
-                    val epName = ep.nameCn?.takeIf { it.isNotBlank() } ?: ep.name
+                // 有新剧集，只推送最新的那一集（避免推送大量历史剧集）
+                val latestEp = airedEpisodes.maxByOrNull { it.sort.toInt() }
+                if (latestEp != null) {
+                    // 使用 ep 字段显示本季集数（如果没有则使用 sort）
+                    val epNumber = latestEp.ep?.toInt() ?: latestEp.sort.toInt()
+                    val epName = latestEp.nameCn?.takeIf { it.isNotBlank() } ?: latestEp.name
 
                     notificationService.sendNewEpisodeNotification(
                         telegramId = subscription.user.telegramId,
@@ -92,7 +92,7 @@ class EpisodeCheckerTask(
                     )
                 }
 
-                // 更新已通知集数
+                // 更新已通知集数为最新（使用 sort 作为唯一标识进行比较）
                 subscriptionService.markNotified(subscription.id!!, latestAiredEp)
                 subscriptionService.updateLatestEpisode(subscription.id!!, latestAiredEp)
             }

@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 注意
+
+开发过程中应同步更新必要的内容到 CLAUDE.md 和 README.md。
+
 ## 项目简介
 
 Telegram 追番提醒机器人，连接 Bangumi.tv 账号，自动推送新剧集更新通知。

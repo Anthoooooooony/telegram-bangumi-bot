@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: telegram-bangumi-bot
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/bangumi}
+    username: ${SPRING_DATASOURCE_USERNAME:bangumi}
+    password: ${SPRING_DATASOURCE_PASSWORD:bangumi}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+
+telegram:
+  bot:
+    token: ${TELEGRAM_BOT_TOKEN:}
+
+bangumi:
+  api:
+    base-url: https://api.bgm.tv
+    user-agent: telegram-bangumi-bot/1.0
+
+encryption:
+  key: ${ENCRYPTION_KEY:default-dev-key-change-in-prod}
+
+logging:
+  level:
+    fun.fantasea.bangumi: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

@@ -1,0 +1,45 @@
+services:
+  app:
+    build: .
+    container_name: bangumi-bot
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/bangumi
+      SPRING_DATASOURCE_USERNAME: bangumi
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-bangumi}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-this-in-production}
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:8080"
+    networks:
+      - bangumi-net
+
+  db:
+    image: postgres:16-alpine
+    container_name: bangumi-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bangumi
+      POSTGRES_USER: bangumi
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-bangumi}
+      TZ: Asia/Shanghai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bangumi -d bangumi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bangumi-net
+
+networks:
+  bangumi-net:
+    driver: bridge
+
+volumes:
+  pgdata:

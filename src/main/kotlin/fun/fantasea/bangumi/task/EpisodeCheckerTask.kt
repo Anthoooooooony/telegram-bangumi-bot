@@ -3,6 +3,7 @@ package `fun`.fantasea.bangumi.task
 import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.client.Episode
 import `fun`.fantasea.bangumi.repository.SubscriptionRepository
+import `fun`.fantasea.bangumi.service.EpisodeInfo
 import `fun`.fantasea.bangumi.service.NotificationService
 import `fun`.fantasea.bangumi.service.SubscriptionService
 import kotlinx.coroutines.runBlocking
@@ -77,18 +78,23 @@ class EpisodeCheckerTask(
             val lastNotified = subscription.lastNotifiedEp
 
             if (latestAiredEp > lastNotified) {
-                // 有新剧集，只推送最新的那一集（避免推送大量历史剧集）
-                val latestEp = airedEpisodes.maxByOrNull { it.sort.toInt() }
-                if (latestEp != null) {
-                    // 使用 ep 字段显示本季集数（如果没有则使用 sort）
-                    val epNumber = latestEp.ep?.toInt() ?: latestEp.sort.toInt()
-                    val epName = latestEp.nameCn?.takeIf { it.isNotBlank() } ?: latestEp.name
+                // 收集所有未通知的新剧集
+                val newEpisodes = airedEpisodes
+                    .filter { it.sort.toInt() > lastNotified }
+                    .map { ep ->
+                        EpisodeInfo(
+                            epNumber = ep.ep?.toInt() ?: ep.sort.toInt(),
+                            sortNumber = ep.sort.toInt(),
+                            name = ep.nameCn?.takeIf { it.isNotBlank() } ?: ep.name
+                        )
+                    }
+                    .sortedBy { it.sortNumber }
 
+                if (newEpisodes.isNotEmpty()) {
                     notificationService.sendNewEpisodeNotification(
                         telegramId = subscription.user.telegramId,
                         subscription = subscription,
-                        episodeNumber = epNumber,
-                        episodeName = epName
+                        episodes = newEpisodes
                     )
                 }
 

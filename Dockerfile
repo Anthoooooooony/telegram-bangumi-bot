@@ -16,6 +16,14 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+# 安装中文字体（用于图片生成）
+RUN apk add --no-cache fontconfig ttf-dejavu \
+    && mkdir -p /usr/share/fonts/chinese \
+    && wget -q -O /tmp/NotoSansSC.zip "https://github.com/googlefonts/noto-cjk/releases/download/Sans2.004/03_NotoSansCJK-OTC.zip" \
+    && unzip -j /tmp/NotoSansSC.zip "*/NotoSansCJKsc-Regular.otf" -d /usr/share/fonts/chinese/ \
+    && rm /tmp/NotoSansSC.zip \
+    && fc-cache -fv
+
 # 创建非 root 用户
 RUN addgroup -g 1000 app && adduser -u 1000 -G app -s /bin/sh -D app
 

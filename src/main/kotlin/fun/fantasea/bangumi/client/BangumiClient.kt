@@ -78,7 +78,32 @@ class BangumiClient(
             parameter("subject_id", subjectId)
         }.body()
     }
+
+    /**
+     * 获取条目详情（用于获取封面图等）
+     */
+    suspend fun getSubject(subjectId: Int): SubjectDetail {
+        log.debug("获取 subject {} 详情", subjectId)
+        return client.get("$baseUrl/v0/subjects/$subjectId").body()
+    }
 }
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class SubjectDetail(
+    val id: Int,
+    val name: String,
+    @JsonProperty("name_cn") val nameCn: String?,
+    val images: SubjectImages?
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class SubjectImages(
+    val large: String?,
+    val common: String?,
+    val medium: String?,
+    val small: String?,
+    val grid: String?
+)
 
 // DTO classes
 

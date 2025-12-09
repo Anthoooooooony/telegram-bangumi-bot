@@ -15,6 +15,9 @@ import org.telegram.telegrambots.longpolling.starter.SpringLongPollingBot
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
+import org.telegram.telegrambots.meta.api.objects.InputFile
+import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand
 import org.telegram.telegrambots.meta.generics.TelegramClient
@@ -230,6 +233,22 @@ class BangumiBot(
                 .replace("\\", "")
                 .replace("*", "")
             sendMessage(chatId, plainText)
+        }
+    }
+
+    /**
+     * 发送图片
+     */
+    fun sendPhoto(chatId: Long, imageData: ByteArray) {
+        try {
+            val inputStream = ByteArrayInputStream(imageData)
+            val photo = SendPhoto.builder()
+                .chatId(chatId)
+                .photo(InputFile(inputStream, "notification.png"))
+                .build()
+            telegramClient.execute(photo)
+        } catch (e: Exception) {
+            log.error("发送图片失败: {}", e.message, e)
         }
     }
 }

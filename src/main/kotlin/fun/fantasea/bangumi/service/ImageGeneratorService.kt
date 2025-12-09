@@ -17,7 +17,9 @@ import javax.imageio.ImageIO
  * 使用 Java2D 绘制通知卡片
  */
 @Service
-class ImageGeneratorService {
+class ImageGeneratorService(
+    private val bangumiCacheService: BangumiCacheService
+) {
     private val log = LoggerFactory.getLogger(ImageGeneratorService::class.java)
 
     companion object {
@@ -104,7 +106,7 @@ class ImageGeneratorService {
     private fun drawBackground(g2d: Graphics2D, coverUrl: String?) {
         if (!coverUrl.isNullOrBlank()) {
             try {
-                val coverImage = ImageIO.read(URI(coverUrl).toURL())
+                val coverImage = loadCoverImage(coverUrl)
                 if (coverImage != null) {
                     // Cover 模式：缩放填满卡片
                     val scale = maxOf(
@@ -304,16 +306,11 @@ class ImageGeneratorService {
         val itemRect = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), itemRadius, itemRadius)
         g2d.clip = itemRect
 
-        // 尝试绘制封面背景
+        // 尝试绘制封面背景（使用缓存）
         var hasCover = false
         if (!anime.coverUrl.isNullOrBlank()) {
             try {
-                val url = URI(anime.coverUrl).toURL()
-                val connection = url.openConnection()
-                connection.setRequestProperty("User-Agent", "telegram-bangumi-bot/1.0")
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
-                val coverImage = ImageIO.read(connection.getInputStream())
+                val coverImage = loadCoverImage(anime.coverUrl)
                 if (coverImage != null) {
                     // Cover 模式：缩放填满条目区域
                     val scale = maxOf(width.toDouble() / coverImage.width, height.toDouble() / coverImage.height)
@@ -370,6 +367,31 @@ class ImageGeneratorService {
             g2d.color = TEXT_MUTED
             g2d.font = getFont(Font.PLAIN, 13)
             g2d.drawString(anime.airInfo, textX, y + 50)
+        }
+    }
+
+    /**
+     * 加载封面图片（优先从缓存获取）
+     */
+    private fun loadCoverImage(coverUrl: String): BufferedImage? {
+        // 优先从缓存获取
+        bangumiCacheService.getCoverImage(coverUrl)?.let { return it }
+
+        // 缓存未命中，从网络加载
+        return try {
+            val url = URI(coverUrl).toURL()
+            val connection = url.openConnection()
+            connection.setRequestProperty("User-Agent", "telegram-bangumi-bot/1.0")
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            val image = ImageIO.read(connection.getInputStream())
+            if (image != null) {
+                bangumiCacheService.putCoverImage(coverUrl, image)
+            }
+            image
+        } catch (e: Exception) {
+            log.debug("从网络加载封面图失败: {}", e.message)
+            null
         }
     }
 
@@ -492,16 +514,11 @@ class ImageGeneratorService {
         val itemRect = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), itemRadius, itemRadius)
         g2d.clip = itemRect
 
-        // 尝试绘制封面背景
+        // 尝试绘制封面背景（使用缓存）
         var hasCover = false
         if (!anime.coverUrl.isNullOrBlank()) {
             try {
-                val url = URI(anime.coverUrl).toURL()
-                val connection = url.openConnection()
-                connection.setRequestProperty("User-Agent", "telegram-bangumi-bot/1.0")
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
-                val coverImage = ImageIO.read(connection.getInputStream())
+                val coverImage = loadCoverImage(anime.coverUrl)
                 if (coverImage != null) {
                     val scale = maxOf(width.toDouble() / coverImage.width, height.toDouble() / coverImage.height)
                     val scaledWidth = (coverImage.width * scale).toInt()

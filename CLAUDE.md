@@ -78,6 +78,13 @@ docker-compose logs -f app
 **播放平台链接**:
 `BangumiDataClient` 从 bangumi-data (jsdelivr CDN) 获取流媒体平台数据，通知消息使用 MarkdownV2 格式，特殊字符需转义
 
+**资源缓存**:
+`BangumiCacheService` 提供内存缓存，减少 API 调用和图片下载：
+- 番剧详情 (SubjectDetail): 缓存 1 小时
+- 剧集列表 (EpisodeResponse): 缓存 1 小时
+- 封面图片 (BufferedImage): 缓存 24 小时
+- 每 10 分钟自动清理过期条目
+
 ## 环境变量
 
 | 变量 | 说明 |

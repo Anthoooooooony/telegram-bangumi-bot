@@ -1,5 +1,6 @@
 package `fun`.fantasea.bangumi.service
 
+import io.mockk.mockk
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -10,7 +11,8 @@ import java.io.File
  */
 class ImageGeneratorServiceTest {
 
-    private val service = ImageGeneratorService()
+    private val bangumiCacheService = mockk<BangumiCacheService>(relaxed = true)
+    private val service = ImageGeneratorService(bangumiCacheService)
 
     @Test
     @Disabled("手动运行生成样例图片")

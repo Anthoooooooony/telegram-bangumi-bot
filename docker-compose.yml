@@ -6,6 +6,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/bangumi
       SPRING_DATASOURCE_USERNAME: bangumi
@@ -20,6 +25,11 @@ services:
     image: postgres:16-alpine
     container_name: bangumi-db
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       POSTGRES_DB: bangumi
       POSTGRES_USER: bangumi

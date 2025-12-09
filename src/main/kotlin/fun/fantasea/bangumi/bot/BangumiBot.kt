@@ -1,6 +1,7 @@
 package `fun`.fantasea.bangumi.bot
 
 import `fun`.fantasea.bangumi.client.BangumiClient
+import `fun`.fantasea.bangumi.service.BangumiCacheService
 import `fun`.fantasea.bangumi.service.ImageGeneratorService
 import `fun`.fantasea.bangumi.service.SubscriptionAnime
 import `fun`.fantasea.bangumi.service.SubscriptionService
@@ -36,7 +37,8 @@ class BangumiBot(
     private val userService: UserService,
     private val subscriptionService: SubscriptionService,
     private val imageGeneratorService: ImageGeneratorService,
-    private val bangumiClient: BangumiClient
+    private val bangumiClient: BangumiClient,
+    private val bangumiCacheService: BangumiCacheService
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(BangumiBot::class.java)
@@ -176,16 +178,25 @@ class BangumiBot(
         scope.launch {
             try {
                 val today = java.time.LocalDate.now()
-                // 获取每个订阅的封面图和当前已播出集数
+                // 获取每个订阅的封面图和当前已播出集数（使用缓存）
                 val animes = subscriptions.map { sub ->
                     val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
                     var coverUrl: String? = null
                     var latestAiredEp: Int? = null
 
                     try {
-                        coverUrl = bangumiClient.getSubject(sub.subjectId).images?.common
-                        // 获取已播出的最新集数，使用 ep（本季集数）
-                        val episodes = bangumiClient.getEpisodes(sub.subjectId)
+                        // 优先从缓存获取番剧详情
+                        val subject = bangumiCacheService.getSubject(sub.subjectId)
+                            ?: bangumiClient.getSubject(sub.subjectId).also {
+                                bangumiCacheService.putSubject(sub.subjectId, it)
+                            }
+                        coverUrl = subject.images?.common
+
+                        // 优先从缓存获取剧集列表
+                        val episodes = bangumiCacheService.getEpisodes(sub.subjectId)
+                            ?: bangumiClient.getEpisodes(sub.subjectId).also {
+                                bangumiCacheService.putEpisodes(sub.subjectId, it)
+                            }
                         latestAiredEp = episodes.data
                             .filter { it.type == 0 }
                             .filter { ep ->

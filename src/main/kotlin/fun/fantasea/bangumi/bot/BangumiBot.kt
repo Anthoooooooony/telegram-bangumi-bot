@@ -3,6 +3,7 @@ package `fun`.fantasea.bangumi.bot
 import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.service.BangumiCacheService
 import `fun`.fantasea.bangumi.service.ImageGeneratorService
+import `fun`.fantasea.bangumi.service.RateLimiterService
 import `fun`.fantasea.bangumi.service.SubscriptionAnime
 import `fun`.fantasea.bangumi.service.SubscriptionService
 import `fun`.fantasea.bangumi.service.UserService
@@ -40,7 +41,8 @@ class BangumiBot(
     private val subscriptionService: SubscriptionService,
     private val imageGeneratorService: ImageGeneratorService,
     private val bangumiClient: BangumiClient,
-    private val bangumiCacheService: BangumiCacheService
+    private val bangumiCacheService: BangumiCacheService,
+    private val rateLimiterService: RateLimiterService
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
     private val log = LoggerFactory.getLogger(BangumiBot::class.java)
@@ -93,6 +95,12 @@ class BangumiBot(
             val username = update.message.from.userName ?: update.message.from.firstName
 
             log.info("收到消息 from {} ({}): {}", username, userId, text)
+
+            // 速率限制检查
+            if (!rateLimiterService.tryAcquire(userId)) {
+                sendMessage(chatId, "请求太频繁，请稍后再试。")
+                return
+            }
 
             // 确保用户存在
             userService.getOrCreateUser(userId, username)

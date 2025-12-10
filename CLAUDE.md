@@ -85,6 +85,11 @@ docker-compose logs -f app
 - 封面图片 (BufferedImage): 缓存 24 小时
 - 每 10 分钟自动清理过期条目
 
+**速率限制**:
+`RateLimiterService` 使用 Bucket4j 令牌桶算法限制每个用户的请求频率，防止滥用：
+- 每个用户独立限流，使用 Caffeine 缓存，闲置 10 分钟后自动释放
+- 默认 10 个突发令牌，每 3 秒恢复 1 个
+
 ## 环境变量
 
 | 变量 | 说明 |
@@ -92,6 +97,8 @@ docker-compose logs -f app
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token (必需) |
 | `ENCRYPTION_KEY` | Token 加密密钥 |
 | `DB_PASSWORD` | PostgreSQL 密码 |
+| `RATE_LIMITER_BURST` | 突发令牌数 (默认 10) |
+| `RATE_LIMITER_RESTORE_INTERVAL_SECONDS` | 令牌恢复间隔秒数 (默认 3) |
 
 ## 编码风格
 

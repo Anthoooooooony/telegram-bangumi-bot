@@ -20,6 +20,8 @@ import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateC
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.InputFile
 import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.objects.Update
@@ -130,12 +132,12 @@ class BangumiBot(
         }
 
         val token = parts[1].trim()
-        sendMessage(chatId, "正在验证 Token...")
+        val messageId = sendMessageAndGetId(chatId, "正在验证 Token...")
 
         scope.launch {
             val result = userService.bindToken(userId, token)
             if (result.success) {
-                sendMessage(chatId, """
+                editMessage(chatId, messageId, """
                     绑定成功！
                     Bangumi 用户: ${result.bangumiUsername}
                     昵称: ${result.bangumiNickname}
@@ -146,12 +148,26 @@ class BangumiBot(
                 // 自动同步追番列表
                 val syncResult = subscriptionService.syncSubscriptions(userId)
                 if (syncResult.success) {
-                    sendMessage(chatId, "同步完成！共 ${syncResult.syncedCount} 部在看。\n\n使用 /list 查看追番列表。")
+                    editMessage(chatId, messageId, """
+                        绑定成功！
+                        Bangumi 用户: ${result.bangumiUsername}
+                        昵称: ${result.bangumiNickname}
+
+                        同步完成！共 ${syncResult.syncedCount} 部在看。
+                        使用 /list 查看追番列表。
+                    """.trimIndent())
                 } else {
-                    sendMessage(chatId, "同步失败: ${syncResult.error}\n\n请稍后手动重试。")
+                    editMessage(chatId, messageId, """
+                        绑定成功！
+                        Bangumi 用户: ${result.bangumiUsername}
+                        昵称: ${result.bangumiNickname}
+
+                        同步失败: ${syncResult.error}
+                        请稍后手动重试。
+                    """.trimIndent())
                 }
             } else {
-                sendMessage(chatId, "绑定失败: ${result.error}")
+                editMessage(chatId, messageId, "绑定失败: ${result.error}")
             }
         }
     }
@@ -173,7 +189,7 @@ class BangumiBot(
             return
         }
 
-        sendMessage(chatId, "正在生成追番列表...")
+        val messageId = sendMessageAndGetId(chatId, "正在生成追番列表...")
 
         scope.launch {
             try {
@@ -219,6 +235,7 @@ class BangumiBot(
                 }
 
                 val imageData = imageGeneratorService.generateSubscriptionListCard(animes)
+                deleteMessage(chatId, messageId)
                 sendPhoto(chatId, imageData)
             } catch (e: Exception) {
                 log.error("生成追番列表图片失败: {}", e.message, e)
@@ -229,7 +246,7 @@ class BangumiBot(
                     val eps = sub.totalEpisodes?.let { " (${it}集)" } ?: ""
                     sb.append("${index + 1}. $name$eps\n")
                 }
-                sendMessage(chatId, sb.toString())
+                editMessage(chatId, messageId, sb.toString())
             }
         }
     }
@@ -275,6 +292,59 @@ class BangumiBot(
             telegramClient.execute(message)
         } catch (e: Exception) {
             log.error("发送消息失败: {}", e.message, e)
+        }
+    }
+
+    /**
+     * 发送消息并返回消息 ID，用于后续编辑
+     */
+    private fun sendMessageAndGetId(chatId: Long, text: String): Int {
+        return try {
+            val message = SendMessage.builder()
+                .chatId(chatId)
+                .text(text)
+                .build()
+            telegramClient.execute(message).messageId
+        } catch (e: Exception) {
+            log.error("发送消息失败: {}", e.message, e)
+            -1
+        }
+    }
+
+    /**
+     * 编辑已发送的消息
+     */
+    private fun editMessage(chatId: Long, messageId: Int, text: String) {
+        if (messageId < 0) {
+            // 消息发送失败，改为发送新消息
+            sendMessage(chatId, text)
+            return
+        }
+        try {
+            val edit = EditMessageText.builder()
+                .chatId(chatId)
+                .messageId(messageId)
+                .text(text)
+                .build()
+            telegramClient.execute(edit)
+        } catch (e: Exception) {
+            log.error("编辑消息失败: {}", e.message, e)
+        }
+    }
+
+    /**
+     * 删除已发送的消息
+     */
+    private fun deleteMessage(chatId: Long, messageId: Int) {
+        if (messageId < 0) return
+        try {
+            val delete = DeleteMessage.builder()
+                .chatId(chatId)
+                .messageId(messageId)
+                .build()
+            telegramClient.execute(delete)
+        } catch (e: Exception) {
+            log.debug("删除消息失败: {}", e.message)
         }
     }
 

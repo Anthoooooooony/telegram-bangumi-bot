@@ -83,8 +83,8 @@ class BangumiDataClient(
             val data: BangumiData = objectMapper.readValue(jsonText)
             val siteMeta = data.siteMeta
 
-            // 构建内存缓存
-            bangumiDataCache.clear()
+            // 先构建临时缓存，成功后再替换旧缓存（降级策略：解析失败时保留旧数据）
+            val newCache = mutableMapOf<Int, BangumiDataInfo>()
 
             for (item in data.items) {
                 val bangumiSite = item.sites.find { it.site == "bangumi" && it.id != null }
@@ -113,13 +113,17 @@ class BangumiDataClient(
                 val endTime = parseIsoInstant(item.end)
                 val broadcastPeriod = parseBroadcastPeriod(item.broadcast)
 
-                bangumiDataCache[subjectId] = BangumiDataInfo(
+                newCache[subjectId] = BangumiDataInfo(
                     beginTime = beginTime,
                     endTime = endTime,
                     broadcastPeriod = broadcastPeriod,
                     platforms = platforms
                 )
             }
+
+            // 解析成功，替换旧缓存
+            bangumiDataCache.clear()
+            bangumiDataCache.putAll(newCache)
 
             val platformCount = bangumiDataCache.values.count { it.platforms.isNotEmpty() }
             val timeCount = bangumiDataCache.values.count { it.beginTime != null }
@@ -128,7 +132,7 @@ class BangumiDataClient(
                 bangumiDataCache.size, platformCount, timeCount
             )
         } catch (e: Exception) {
-            log.error("解析 bangumi-data 失败: {}", e.message, e)
+            log.error("解析 bangumi-data 失败，保留旧缓存 ({} 条): {}", bangumiDataCache.size, e.message, e)
         }
     }
 

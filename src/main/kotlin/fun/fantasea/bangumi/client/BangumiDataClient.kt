@@ -28,8 +28,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Component
 class BangumiDataClient(
-    @Value("\${telegram.proxy.host:}") private val proxyHost: String,
-    @Value("\${telegram.proxy.port:0}") private val proxyPort: Int
+    @param:Value("\${telegram.proxy.host:}") private val proxyHost: String,
+    @param:Value("\${telegram.proxy.port:0}") private val proxyPort: Int
 ) {
     private val log = LoggerFactory.getLogger(BangumiDataClient::class.java)
 
@@ -146,7 +146,7 @@ data class SiteMeta(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class BangumiDataItem(
     val title: String,
-    @JsonProperty("titleTranslate") val titleTranslate: Map<String, List<String>>? = null,
+    @field:JsonProperty("titleTranslate") val titleTranslate: Map<String, List<String>>? = null,
     val type: String? = null,
     val sites: List<BangumiDataSite> = emptyList()
 )

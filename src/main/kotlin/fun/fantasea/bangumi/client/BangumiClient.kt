@@ -17,10 +17,10 @@ import org.springframework.stereotype.Component
 
 @Component
 class BangumiClient(
-    @Value("\${bangumi.api.base-url}") private val baseUrl: String,
-    @Value("\${bangumi.api.user-agent}") private val userAgent: String,
-    @Value("\${telegram.proxy.host:}") private val proxyHost: String,
-    @Value("\${telegram.proxy.port:0}") private val proxyPort: Int
+    @param:Value("\${bangumi.api.base-url}") private val baseUrl: String,
+    @param:Value("\${bangumi.api.user-agent}") private val userAgent: String,
+    @param:Value("\${telegram.proxy.host:}") private val proxyHost: String,
+    @param:Value("\${telegram.proxy.port:0}") private val proxyPort: Int
 ) {
     private val log = LoggerFactory.getLogger(BangumiClient::class.java)
 
@@ -103,7 +103,7 @@ class BangumiClient(
 data class SubjectDetail(
     val id: Int,
     val name: String,
-    @JsonProperty("name_cn") val nameCn: String?,
+    @field:JsonProperty("name_cn") val nameCn: String?,
     val images: SubjectImages?
 )
 
@@ -136,7 +136,7 @@ data class Weekday(
 data class CalendarSubject(
     val id: Int,
     val name: String,
-    @JsonProperty("name_cn") val nameCn: String?,
+    @field:JsonProperty("name_cn") val nameCn: String?,
     val air_date: String?,
     val air_weekday: Int?
 )
@@ -156,7 +156,7 @@ data class CollectionResponse(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class CollectionItem(
-    @JsonProperty("subject_id") val subjectId: Int,
+    @field:JsonProperty("subject_id") val subjectId: Int,
     val subject: CollectionSubject?
 )
 
@@ -164,7 +164,7 @@ data class CollectionItem(
 data class CollectionSubject(
     val id: Int,
     val name: String,
-    @JsonProperty("name_cn") val nameCn: String?,
+    @field:JsonProperty("name_cn") val nameCn: String?,
     val eps: Int?
 )
 
@@ -179,7 +179,7 @@ data class Episode(
     val id: Int,
     val type: Int,
     val name: String,
-    @JsonProperty("name_cn") val nameCn: String?,
+    @field:JsonProperty("name_cn") val nameCn: String?,
     val sort: Double,
     val ep: Double?, // todo 明确 ep 和 sort 的使用
     val airdate: String?,

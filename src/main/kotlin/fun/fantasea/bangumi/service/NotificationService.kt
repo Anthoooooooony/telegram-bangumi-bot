@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service
  */
 @Service
 class NotificationService(
-    @Lazy private val bangumiBot: BangumiBot,
+    @param:Lazy private val bangumiBot: BangumiBot,
     private val bangumiDataClient: BangumiDataClient,
     private val bangumiClient: BangumiClient,
     private val imageGeneratorService: ImageGeneratorService

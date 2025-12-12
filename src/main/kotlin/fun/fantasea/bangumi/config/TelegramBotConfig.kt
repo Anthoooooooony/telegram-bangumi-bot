@@ -16,8 +16,8 @@ import java.util.concurrent.TimeUnit
  */
 @Configuration
 class TelegramBotConfig(
-    @Value("\${telegram.proxy.host:}") private val proxyHost: String,
-    @Value("\${telegram.proxy.port:0}") private val proxyPort: Int
+    @param:Value("\${telegram.proxy.host:}") private val proxyHost: String,
+    @param:Value("\${telegram.proxy.port:0}") private val proxyPort: Int
 ) {
 
     @Bean

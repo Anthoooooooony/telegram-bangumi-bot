@@ -38,9 +38,9 @@ import java.util.concurrent.TimeUnit
 
 @Component
 class BangumiBot(
-    @Value("\${telegram.bot.token}") private val botToken: String,
-    @Value("\${telegram.proxy.host:}") private val proxyHost: String,
-    @Value("\${telegram.proxy.port:0}") private val proxyPort: Int,
+    @param:Value("\${telegram.bot.token}") private val botToken: String,
+    @param:Value("\${telegram.proxy.host:}") private val proxyHost: String,
+    @param:Value("\${telegram.proxy.port:0}") private val proxyPort: Int,
     private val userService: UserService,
     private val subscriptionService: SubscriptionService,
     private val imageGeneratorService: ImageGeneratorService,

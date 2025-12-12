@@ -158,39 +158,28 @@ class BangumiBot(
 
         scope.launch {
             val result = userService.bindToken(userId, token)
-            if (result.success) {
-                editMessage(chatId, messageId, """
+            if (!result.success) {
+                editMessage(chatId, messageId, "绑定失败: ${result.error}")
+                return@launch
+            }
+
+            val msg = DynamicMessage(chatId, messageId, ::editMessage)
+                .section("header", """
                     绑定成功！
                     Bangumi 用户: ${result.bangumiUsername}
                     昵称: ${result.bangumiNickname}
-
-                    正在同步追番列表...
                 """.trimIndent())
+                .section("status", "正在同步追番列表...")
+                .update()
 
-                // 自动同步追番列表
-                val syncResult = subscriptionService.syncSubscriptions(userId)
-                if (syncResult.success) {
-                    editMessage(chatId, messageId, """
-                        绑定成功！
-                        Bangumi 用户: ${result.bangumiUsername}
-                        昵称: ${result.bangumiNickname}
-
-                        同步完成！共 ${syncResult.syncedCount} 部在看。
-                        使用 /list 查看追番列表。
-                    """.trimIndent())
-                } else {
-                    editMessage(chatId, messageId, """
-                        绑定成功！
-                        Bangumi 用户: ${result.bangumiUsername}
-                        昵称: ${result.bangumiNickname}
-
-                        同步失败: ${syncResult.error}
-                        请稍后手动重试。
-                    """.trimIndent())
-                }
+            // 自动同步追番列表
+            val syncResult = subscriptionService.syncSubscriptions(userId)
+            val statusText = if (syncResult.success) {
+                "同步完成！共 ${syncResult.syncedCount} 部在看。\n使用 /list 查看追番列表。"
             } else {
-                editMessage(chatId, messageId, "绑定失败: ${result.error}")
+                "同步失败: ${syncResult.error}\n请稍后手动重试。"
             }
+            msg.section("status", statusText).update()
         }
     }
 

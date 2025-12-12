@@ -6,6 +6,7 @@ import `fun`.fantasea.bangumi.client.Episode
 import `fun`.fantasea.bangumi.entity.Anime
 import `fun`.fantasea.bangumi.repository.AnimeRepository
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.time.Instant
@@ -23,12 +24,14 @@ import java.time.format.DateTimeFormatter
 class AnimeService(
     private val animeRepository: AnimeRepository,
     private val bangumiClient: BangumiClient,
-    private val bangumiDataClient: BangumiDataClient
+    private val bangumiDataClient: BangumiDataClient,
+    @param:Value("\${anime.timezone:Asia/Shanghai}") private val timezone: String
 ) {
     private val log = LoggerFactory.getLogger(AnimeService::class.java)
 
+    private val zoneId: ZoneId by lazy { ZoneId.of(timezone) }
+
     companion object {
-        private val CHINA_ZONE = ZoneId.of("Asia/Shanghai")
         private val TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
         private val DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm")
     }
@@ -109,7 +112,7 @@ class AnimeService(
         val airdate = episode.airdate ?: return false
         return try {
             val episodeDate = LocalDate.parse(airdate)
-            val today = LocalDate.now(CHINA_ZONE)
+            val today = LocalDate.now(zoneId)
             !episodeDate.isAfter(today)
         } catch (e: Exception) {
             log.debug("解析播出日期失败: airdate={}, error={}", airdate, e.message)
@@ -123,8 +126,8 @@ class AnimeService(
      */
     fun formatAirTime(anime: Anime, episodeSort: Int): String? {
         val airTime = calculateEpisodeAirTime(anime, episodeSort) ?: return null
-        val airDateTime = LocalDateTime.ofInstant(airTime, CHINA_ZONE)
-        val today = LocalDate.now(CHINA_ZONE)
+        val airDateTime = LocalDateTime.ofInstant(airTime, zoneId)
+        val today = LocalDate.now(zoneId)
         val airDate = airDateTime.toLocalDate()
         val timeStr = airDateTime.format(TIME_FORMATTER)
 

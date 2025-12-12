@@ -1,0 +1,85 @@
+# Issue 优化助手
+#
+# 触发条件: 新 Issue 创建时自动运行
+#
+# 功能:
+#   1. 自动标签: 根据 Issue 内容自动添加合适的标签
+#   2. 内容增强: 补充相关代码位置、上下文信息
+#   3. 重复检测: 检查是否存在类似的 Issue
+#   4. 格式验证: 确保 Issue 结构清晰、信息完整
+
+name: Issue Optimizer
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  optimize-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Issue Optimizer
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            你是一个 GitHub Issue 优化助手。请分析以下新创建的 Issue 并执行优化任务。
+
+            REPO: ${{ github.repository }}
+            ISSUE NUMBER: ${{ github.event.issue.number }}
+            ISSUE TITLE: ${{ github.event.issue.title }}
+            ISSUE BODY: ${{ github.event.issue.body }}
+            ISSUE AUTHOR: ${{ github.event.issue.user.login }}
+
+            请执行以下任务:
+
+            ## 1. 自动标签
+            根据 Issue 内容分析并添加合适的标签。仅使用以下已存在的标签:
+            - `bug`: Something isn't working (程序错误或异常行为)
+            - `documentation`: Improvements or additions to documentation (文档相关)
+            - `duplicate`: This issue or pull request already exists (重复问题)
+            - `enhancement`: New feature or request (功能增强或新需求)
+            - `invalid`: This doesn't seem right (无效问题)
+            - `question`: Further information is requested (问题或疑问)
+            - `wontfix`: This will not be worked on (不予处理)
+
+            使用 `gh issue edit <number> --add-label <label>` 添加标签。
+
+            ## 2. 重复检测
+            搜索现有 Issue，检查是否存在类似问题:
+            - 使用 `gh issue list --search "<keywords>" --state all` 搜索
+            - 如果发现可能的重复项，在评论中提及并添加 `duplicate` 标签
+
+            ## 3. 内容增强
+            分析 Issue 内容，如果涉及代码问题:
+            - 搜索代码库找到相关文件位置
+            - 提供可能相关的代码上下文
+            - 参考 CLAUDE.md 了解项目架构
+
+            ## 4. 格式验证
+            检查 Issue 是否包含足够信息:
+            - Bug: 是否有复现步骤、预期行为、实际行为
+            - Feature: 是否有清晰的需求描述和使用场景
+            - 如果信息不足，礼貌地请求补充
+
+            ## 输出
+            将分析结果作为一条友好的评论发布到 Issue:
+            - 使用 `gh issue comment <number> --body "<comment>"`
+            - 评论应简洁、有帮助、使用中文
+            - 如果发现重复 Issue，说明相似点和链接
+            - 如果找到相关代码，提供文件路径和简要说明
+            - 如果需要更多信息，具体说明需要什么
+
+            注意: 保持友好和专业的语气，目标是帮助作者和维护者更高效地处理 Issue。
+
+          claude_args: '--allowed-tools "Bash(gh issue:*),Bash(gh search:*),Read,Glob,Grep"'

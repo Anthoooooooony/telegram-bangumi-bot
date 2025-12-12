@@ -1,3 +1,10 @@
+# Claude Code 助手
+#
+# 触发条件: 在 Issue 或 PR 中 @claude 时响应
+#
+# 功能: 在 Issue 评论、PR 评论、PR Review 中提及 @claude 时，
+#       Claude 会根据上下文和指令自动响应
+
 name: Claude Code
 
 on:
@@ -12,6 +19,7 @@ on:
 
 jobs:
   claude:
+    # 仅在消息中包含 @claude 时触发
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
@@ -23,7 +31,7 @@ jobs:
       pull-requests: read
       issues: read
       id-token: write
-      actions: read # Required for Claude to read CI results on PRs
+      actions: read  # 允许 Claude 读取 CI 结果
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,15 +44,13 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-          # This is an optional setting that allows Claude to read CI results on PRs
+          # 允许 Claude 读取 PR 的 CI 结果
           additional_permissions: |
             actions: read
 
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
+          # 可选: 自定义 prompt，不指定则执行 @claude 后的指令
           # prompt: 'Update the pull request description to include a summary of changes.'
 
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+          # 可选: 自定义 Claude 参数
           # claude_args: '--allowed-tools Bash(gh pr:*)'
 

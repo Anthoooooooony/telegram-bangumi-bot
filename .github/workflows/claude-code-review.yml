@@ -1,21 +1,24 @@
+# Claude Code 自动代码审查
+#
+# 触发条件: PR 创建或更新时自动运行
+#
+# 功能: 使用 Claude 对 PR 进行代码审查，检查代码质量、潜在 bug、
+#       性能问题、安全隐患和测试覆盖率，并在 PR 中留下评论
+
 name: Claude Code Review
 
 on:
   pull_request:
     types: [opened, synchronize]
-    # Optional: Only run on specific file changes
+    # 可选: 仅在特定文件变更时运行
     # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    #   - "src/**/*.kt"
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
+    # 可选: 按 PR 作者过滤
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
     #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
 
     runs-on: ubuntu-latest
@@ -51,7 +54,6 @@ jobs:
 
             Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
 
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+          # 限制 Claude 可用的工具，仅允许查看和评论 PR
           claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
 

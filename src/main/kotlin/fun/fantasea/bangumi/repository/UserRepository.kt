@@ -34,11 +34,8 @@ object UserSpecifications {
     }
 
     fun dailySummaryTimeMatches(time: LocalTime): Specification<User> = Specification { root, _, cb ->
-        val hourFn = cb.function("EXTRACT", Int::class.java, cb.literal("HOUR"), root.get<LocalTime>(User::dailySummaryTime.n))
-        val minuteFn = cb.function("EXTRACT", Int::class.java, cb.literal("MINUTE"), root.get<LocalTime>(User::dailySummaryTime.n))
-        cb.and(
-            cb.equal(hourFn, time.hour),
-            cb.equal(minuteFn, time.minute)
-        )
+        // 截断到分钟级别进行比较，避免秒数差异
+        val truncatedTime = time.withSecond(0).withNano(0)
+        cb.equal(root.get<LocalTime>(User::dailySummaryTime.n), truncatedTime)
     }
 }

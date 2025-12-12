@@ -181,7 +181,7 @@ data class Episode(
     val name: String,
     @JsonProperty("name_cn") val nameCn: String?,
     val sort: Double,
-    val ep: Double?,
+    val ep: Double?, // todo 明确 ep 和 sort 的使用
     val airdate: String?,
     val desc: String?
 )

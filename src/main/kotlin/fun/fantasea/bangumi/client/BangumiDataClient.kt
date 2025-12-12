@@ -116,29 +116,6 @@ class BangumiDataClient(
     fun getPlatforms(subjectId: Int): List<PlatformInfo> {
         return platformCache[subjectId.toString()] ?: emptyList()
     }
-
-    /**
-     * 生成播放平台的 Markdown 链接
-     * 格式：[平台A](url) | [平台B](url) | [平台C](url)
-     */
-    fun generatePlatformLinks(subjectId: Int, region: String? = "CN"): String? {
-        val platforms = getPlatforms(subjectId)
-        if (platforms.isEmpty()) return null
-
-        // 过滤区域（如果指定）并限制数量
-        val filtered = if (region != null) {
-            platforms.filter { it.regions == null || it.regions.contains(region) }
-        } else {
-            platforms
-        }.take(5) // 最多显示 5 个平台
-        // todo 优化 -- 更改显示的优先级
-
-        if (filtered.isEmpty()) return null
-
-        return filtered.joinToString(" | ") { platform ->
-            "[${platform.name}](${platform.url})"
-        }
-    }
 }
 
 /**

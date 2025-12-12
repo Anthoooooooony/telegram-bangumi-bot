@@ -127,17 +127,6 @@ class BangumiCacheService {
             log.debug("清理过期缓存: {} 条", cleanedCount)
         }
     }
-
-    /**
-     * 获取缓存统计信息
-     */
-    fun getStats(): CacheStats {
-        return CacheStats(
-            subjectCount = subjectCache.size,
-            episodesCount = episodesCache.size,
-            coverImageCount = coverImageCache.size
-        )
-    }
 }
 
 data class CacheStats(

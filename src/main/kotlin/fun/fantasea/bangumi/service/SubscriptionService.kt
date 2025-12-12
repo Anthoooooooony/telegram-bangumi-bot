@@ -155,7 +155,7 @@ class SubscriptionService(
 /**
  * 同步结果
  */
-data class SyncResult( // todo 移除
+data class SyncResult(
     val success: Boolean,
     val syncedCount: Int = 0,
     val error: String? = null

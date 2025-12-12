@@ -206,8 +206,8 @@ class BangumiBot(
         // 获取每个订阅的封面图和当前已播出集数（使用缓存）
         val animes = subscriptions.map { sub ->
             val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
-            var coverUrl: String? = null
-            var latestAiredEp: Int? = null
+            var coverUrl: String?
+            var latestAiredEp: Int?
 
             try {
                 // 优先从缓存获取番剧详情

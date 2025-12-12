@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication
 import java.net.InetSocketAddress
 import java.net.Proxy
+import java.util.concurrent.TimeUnit
 
 /**
  * Telegram Bot 配置，支持 HTTP 代理
@@ -20,12 +21,17 @@ class TelegramBotConfig(
 
     @Bean
     fun telegramBotsApplication(): TelegramBotsLongPollingApplication {
-        val okHttpClient = if (proxyHost.isNotBlank() && proxyPort > 0) {
+        // Long polling 的 GetUpdates 默认超时 50 秒，readTimeout 需大于此值
+        val builder = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(75, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+
+        if (proxyHost.isNotBlank() && proxyPort > 0) {
             val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort))
-            OkHttpClient.Builder().proxy(proxy).build()
-        } else {
-            OkHttpClient()
+            builder.proxy(proxy)
         }
-        return TelegramBotsLongPollingApplication({ ObjectMapper() }, { okHttpClient })
+
+        return TelegramBotsLongPollingApplication({ ObjectMapper() }, { builder.build() })
     }
 }

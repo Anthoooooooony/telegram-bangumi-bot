@@ -31,6 +31,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 import okhttp3.OkHttpClient
 import java.net.InetSocketAddress
 import java.net.Proxy
+import java.util.concurrent.TimeUnit
 
 @Component
 class BangumiBot(
@@ -52,7 +53,12 @@ class BangumiBot(
         if (proxyHost.isNotBlank() && proxyPort > 0) {
             log.info("使用代理连接 Telegram: {}:{}", proxyHost, proxyPort)
             val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort))
-            val okHttpClient = OkHttpClient.Builder().proxy(proxy).build()
+            val okHttpClient = OkHttpClient.Builder()
+                .proxy(proxy)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .build()
             return OkHttpTelegramClient(okHttpClient, botToken)
         }
         return OkHttpTelegramClient(botToken)

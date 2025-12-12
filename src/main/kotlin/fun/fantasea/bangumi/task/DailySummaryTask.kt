@@ -8,10 +8,12 @@ import `fun`.fantasea.bangumi.service.NotificationService
 import `fun`.fantasea.bangumi.service.TodayAnimeInfo
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
@@ -24,21 +26,24 @@ class DailySummaryTask(
     private val userRepository: UserRepository,
     private val subscriptionRepository: SubscriptionRepository,
     private val bangumiClient: BangumiClient,
-    private val notificationService: NotificationService
+    private val notificationService: NotificationService,
+    @param:Value("\${anime.timezone:Asia/Shanghai}") private val timezone: String
 ) {
     private val log = LoggerFactory.getLogger(DailySummaryTask::class.java)
 
+    private val zoneId: ZoneId by lazy { ZoneId.of(timezone) }
+
     // 记录今日已发送汇总的用户，避免重复发送（线程安全）
     private val sentToday: MutableSet<Long> = ConcurrentHashMap.newKeySet()
-    private val lastResetDate = AtomicReference(LocalDate.now())
+    private val lastResetDate = AtomicReference(LocalDate.now(zoneId))
 
     /**
      * 每分钟检查是否需要发送每日汇总
      */
     @Scheduled(cron = "0 * * * * *") // 每分钟执行
     fun checkAndSendDailySummary() {
-        val now = LocalTime.now()
-        val today = LocalDate.now()
+        val now = LocalTime.now(zoneId)
+        val today = LocalDate.now(zoneId)
 
         // 如果日期变化，重置已发送列表（使用 CAS 保证线程安全）
         val previousDate = lastResetDate.get()
@@ -92,7 +97,7 @@ class DailySummaryTask(
         // 计算 24h 时间窗口的日期范围
         // 汇总时间窗口: (今天 summaryTime - 24h) 到 (今天 summaryTime)
         // 由于 airdate 只有日期没有时间，我们取窗口覆盖的两个日期
-        val today = LocalDate.now()
+        val today = LocalDate.now(zoneId)
         val yesterday = today.minusDays(1)
         val validDates = setOf(yesterday.toString(), today.toString())
 

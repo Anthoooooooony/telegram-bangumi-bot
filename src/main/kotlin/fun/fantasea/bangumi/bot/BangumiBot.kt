@@ -39,6 +39,7 @@ import okhttp3.OkHttpClient
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
 @Component
@@ -46,6 +47,7 @@ class BangumiBot(
     @param:Value("\${telegram.bot.token}") private val botToken: String,
     @param:Value("\${telegram.proxy.host:}") private val proxyHost: String,
     @param:Value("\${telegram.proxy.port:0}") private val proxyPort: Int,
+    @param:Value("\${anime.timezone:Asia/Shanghai}") private val timezone: String,
     private val userService: UserService,
     private val subscriptionService: SubscriptionService,
     private val scheduledNotificationService: ScheduledNotificationService,
@@ -60,6 +62,7 @@ class BangumiBot(
     }
 
     private val log = LoggerFactory.getLogger(BangumiBot::class.java)
+    private val zoneId: ZoneId by lazy { ZoneId.of(timezone) }
     private val telegramClient: TelegramClient = createTelegramClient()
 
     private fun createTelegramClient(): TelegramClient {
@@ -225,7 +228,7 @@ class BangumiBot(
 
         val messageId = sendMessageAndGetId(chatId, "正在生成追番列表...")
 
-        val today = LocalDate.now()
+        val today = LocalDate.now(zoneId)
         // 并发获取每个订阅的封面图和当前已播出集数（使用缓存）
         val animes = subscriptions.map { sub ->
             scope.async {

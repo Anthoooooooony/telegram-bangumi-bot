@@ -2,6 +2,8 @@ name: Build and Push Docker Image
 
 on:
   push:
+    branches:
+      - dev
     tags:
       - 'v*'
 
@@ -16,9 +18,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Determine tags
+        id: tags
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            echo "TAGS=${{ env.DOCKERHUB_REPO }}:${VERSION},${{ env.DOCKERHUB_REPO }}:latest" >> $GITHUB_OUTPUT
+          else
+            echo "TAGS=${{ env.DOCKERHUB_REPO }}:dev-latest" >> $GITHUB_OUTPUT
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -38,8 +46,6 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.DOCKERHUB_REPO }}:${{ steps.version.outputs.VERSION }}
-            ${{ env.DOCKERHUB_REPO }}:latest
+          tags: ${{ steps.tags.outputs.TAGS }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

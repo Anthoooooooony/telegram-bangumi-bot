@@ -73,28 +73,25 @@ class ScheduledNotificationService(
         val airTime = calculateNextAirTime(anime, nextEp) ?: return
 
         val subscriptionId = subscription.id!!
-
-        // 取消已存在的任务
-        cancelScheduledTask(subscriptionId)
+        val now = Instant.now()
 
         // 更新数据库
         subscription.nextNotifyTime = airTime
         subscription.nextNotifyEp = nextEp
         subscriptionRepository.save(subscription)
 
-        // 如果播出时间已过，不安排任务
-        val now = Instant.now()
+        // 如果播出时间已过，不安排任务（但保留数据库记录供重启恢复检查）
         if (airTime.isBefore(now)) {
             log.debug("播出时间已过，跳过调度: {} 第{}集 于 {}", anime.name, nextEp, airTime)
+            scheduledTasks.remove(subscriptionId)?.cancel(false)
             return
         }
 
-        // 安排任务
-        val future = taskScheduler.schedule(
-            { executeNotification(subscriptionId) },
-            airTime
-        )
-        scheduledTasks[subscriptionId] = future
+        // 原子操作：取消旧任务并安排新任务
+        scheduledTasks.compute(subscriptionId) { _, oldFuture ->
+            oldFuture?.cancel(false)
+            taskScheduler.schedule({ executeNotification(subscriptionId) }, airTime)
+        }
 
         log.info("已安排通知: {} 第{}集 于 {} (用户 {})",
             animeService.getDisplayName(anime), nextEp, airTime, subscription.user.telegramId)

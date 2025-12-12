@@ -232,7 +232,7 @@ class BangumiBot(
                     }
                     .maxOfOrNull { it.ep?.toInt() ?: it.sort.toInt() }
             } catch (e: Exception) {
-                log.debug("获取番剧信息失败: subjectId={}", sub.subjectId)
+                throw RuntimeException("获取番剧信息失败: subjectId=${sub.subjectId}", e)
             }
 
             SubscriptionAnime(

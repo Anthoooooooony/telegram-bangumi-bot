@@ -56,8 +56,7 @@ class NotificationService(
         val coverUrl = try {
             bangumiClient.getSubject(subscription.subjectId).images?.common
         } catch (e: Exception) {
-            log.warn("获取封面图失败: {}", e.message)
-            null
+            throw RuntimeException("获取封面图失败: subjectId=${subscription.subjectId}", e)
         }
 
         // 获取播放平台
@@ -66,19 +65,27 @@ class NotificationService(
             .take(MAX_PLATFORMS)
 
         // 生成图片
-        val imageData = imageGeneratorService.generateNotificationCard(
-            animeName = animeName,
-            episodeText = episodeText,
-            episodeName = episodeName,
-            coverUrl = coverUrl,
-            platforms = platforms
-        )
+        val imageData = try {
+            imageGeneratorService.generateNotificationCard(
+                animeName = animeName,
+                episodeText = episodeText,
+                episodeName = episodeName,
+                coverUrl = coverUrl,
+                platforms = platforms
+            )
+        } catch (e: Exception) {
+            throw RuntimeException("生成通知图片失败: subjectId=${subscription.subjectId}", e)
+        }
 
         // 生成播放链接作为图片 caption
         val caption = generatePlatformCaption(platforms)
 
         // 发送图片（带链接）
-        bangumiBot.sendPhoto(telegramId, imageData, caption)
+        try {
+            bangumiBot.sendPhoto(telegramId, imageData, caption)
+        } catch (e: Exception) {
+            throw RuntimeException("发送通知图片失败: telegramId=$telegramId, subjectId=${subscription.subjectId}", e)
+        }
     }
 
     /**
@@ -169,10 +176,18 @@ class NotificationService(
         }
 
         // 生成图片
-        val imageData = imageGeneratorService.generateDailySummaryCard(animes)
+        val imageData = try {
+            imageGeneratorService.generateDailySummaryCard(animes)
+        } catch (e: Exception) {
+            throw RuntimeException("生成每日汇总图片失败: telegramId=$telegramId", e)
+        }
 
         // 发送图片
-        bangumiBot.sendPhoto(telegramId, imageData)
+        try {
+            bangumiBot.sendPhoto(telegramId, imageData)
+        } catch (e: Exception) {
+            throw RuntimeException("发送每日汇总图片失败: telegramId=$telegramId", e)
+        }
     }
 }
 

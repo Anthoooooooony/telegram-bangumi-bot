@@ -11,6 +11,11 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+# 同一 PR 的多个 review 只保留最新的
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   claude-review:
     runs-on: ubuntu-latest

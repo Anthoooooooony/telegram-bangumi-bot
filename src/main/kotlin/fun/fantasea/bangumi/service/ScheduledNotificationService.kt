@@ -185,7 +185,12 @@ class ScheduledNotificationService(
             }
 
             animeName = animeService.getDisplayName(anime)
-            val nextEp = subscription.nextNotifyEp ?: return
+            val nextEp = subscription.nextNotifyEp
+            if (nextEp == null) {
+                log.warn("订阅无下一集信息: subscriptionId={}, subjectId={}", subscriptionId, subjectId)
+                scheduledTasks.remove(subscriptionId)
+                return
+            }
 
             // 发送通知 - 失败则不更新数据库，保持任务状态
             try {

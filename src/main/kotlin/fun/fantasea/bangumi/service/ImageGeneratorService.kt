@@ -92,10 +92,16 @@ class ImageGeneratorService(
         return outputStream.toByteArray()
     }
 
+    /**
+     * 配置 Graphics2D 渲染提示，提升绘制质量
+     */
     private fun setupRenderingHints(g2d: Graphics2D) {
+        // 开启图形抗锯齿，使线条和形状边缘更平滑
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        // 开启文字抗锯齿，使字体渲染更清晰
         g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+        // 双三次插值
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
     }
 
     private fun drawBackground(g2d: Graphics2D, coverUrl: String?) {

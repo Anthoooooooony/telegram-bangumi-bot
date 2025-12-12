@@ -5,6 +5,7 @@ import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.service.BangumiCacheService
 import `fun`.fantasea.bangumi.service.ImageGeneratorService
 import `fun`.fantasea.bangumi.service.RateLimiterService
+import `fun`.fantasea.bangumi.service.ScheduledNotificationService
 import `fun`.fantasea.bangumi.service.SubscriptionAnime
 import `fun`.fantasea.bangumi.service.SubscriptionService
 import `fun`.fantasea.bangumi.service.UserService
@@ -47,6 +48,7 @@ class BangumiBot(
     @param:Value("\${telegram.proxy.port:0}") private val proxyPort: Int,
     private val userService: UserService,
     private val subscriptionService: SubscriptionService,
+    private val scheduledNotificationService: ScheduledNotificationService,
     private val imageGeneratorService: ImageGeneratorService,
     private val bangumiClient: BangumiClient,
     private val bangumiCacheService: BangumiCacheService,
@@ -199,6 +201,12 @@ class BangumiBot(
     }
 
     private fun handleUnbind(chatId: Long, userId: Long) {
+        // 取消该用户所有订阅的通知调度 todo 当检测到用户block bot 时，视为unbind
+        val subscriptions = subscriptionService.getUserSubscriptions(userId)
+        subscriptions.forEach { subscription ->
+            subscription.id?.let { scheduledNotificationService.cancelAndClearScheduledTask(it) }
+        }
+
         val success = userService.unbindToken(userId)
         if (success) {
             sendMessage(chatId, "已解除 Bangumi 账号绑定。")

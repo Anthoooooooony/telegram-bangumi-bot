@@ -3,6 +3,7 @@ package `fun`.fantasea.bangumi.service
 import `fun`.fantasea.bangumi.bot.BangumiBot
 import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.client.BangumiDataClient
+import `fun`.fantasea.bangumi.client.PlatformInfo
 import `fun`.fantasea.bangumi.entity.Subscription
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Lazy
@@ -92,7 +93,7 @@ class NotificationService(
      * 生成播放平台链接 caption（MarkdownV2 格式）
      * 格式: [Bilibili](url)｜[动画疯](url)｜...
      */
-    private fun generatePlatformCaption(platforms: List<`fun`.fantasea.bangumi.client.PlatformInfo>): String? {
+    private fun generatePlatformCaption(platforms: List<PlatformInfo>): String? {
         if (platforms.isEmpty()) return null
 
         return platforms.joinToString("｜") { platform ->

@@ -109,10 +109,26 @@ class ScheduledNotificationService(
     }
 
     /**
-     * 取消订阅的定时任务
+     * 取消订阅的定时任务（仅内存）
      */
     fun cancelScheduledTask(subscriptionId: Long) {
         scheduledTasks.remove(subscriptionId)?.cancel(false)
+    }
+
+    /**
+     * 取消订阅的定时任务并清理数据库
+     * 用于取消订阅或删除订阅时调用，确保重启后不会重新调度已取消的任务
+     */
+    fun cancelAndClearScheduledTask(subscriptionId: Long) {
+        scheduledTasks.remove(subscriptionId)?.cancel(false)
+        subscriptionRepository.findById(subscriptionId).ifPresent { subscription ->
+            if (subscription.nextNotifyTime != null) {
+                subscription.nextNotifyTime = null
+                subscription.nextNotifyEp = null
+                subscriptionRepository.save(subscription)
+                log.info("已取消并清理订阅 {} 的调度信息", subscriptionId)
+            }
+        }
     }
 
     /**

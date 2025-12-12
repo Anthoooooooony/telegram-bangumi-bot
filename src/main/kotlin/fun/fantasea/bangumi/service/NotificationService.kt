@@ -4,7 +4,6 @@ import `fun`.fantasea.bangumi.bot.BangumiBot
 import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.client.BangumiDataClient
 import `fun`.fantasea.bangumi.entity.Subscription
-import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
@@ -26,7 +25,7 @@ class NotificationService(
      * 发送新剧集通知（支持多集聚合）
      * @param episodes 新剧集列表，按集数排序
      */
-    fun sendNewEpisodeNotification(
+    suspend fun sendNewEpisodeNotification(
         telegramId: Long,
         subscription: Subscription,
         episodes: List<EpisodeInfo>
@@ -51,19 +50,17 @@ class NotificationService(
 
         try {
             // 获取封面图
-            val coverUrl = runBlocking {
-                try {
-                    bangumiClient.getSubject(subscription.subjectId).images?.common
-                } catch (e: Exception) {
-                    log.warn("获取封面图失败: {}", e.message)
-                    null
-                }
+            val coverUrl = try {
+                bangumiClient.getSubject(subscription.subjectId).images?.common
+            } catch (e: Exception) {
+                log.warn("获取封面图失败: {}", e.message)
+                null
             }
 
             // 获取播放平台
             val platforms = bangumiDataClient.getPlatforms(subscription.subjectId)
                 .filter { it.regions == null || it.regions.contains("CN") }
-                .take(4)
+                .take(4) // todo 提取为常量
 
             // 生成图片
             val imageData = imageGeneratorService.generateNotificationCard(
@@ -82,7 +79,7 @@ class NotificationService(
         } catch (e: Exception) {
             log.error("生成通知图片失败，降级为文字通知: {}", e.message)
             // 降级为文字通知
-            sendTextNotification(telegramId, animeName, episodeText, episodeName, subscription.subjectId)
+            sendTextNotification(telegramId, animeName, episodeText, episodeName, subscription.subjectId) // todo 移除降级方案
         }
     }
 
@@ -215,7 +212,7 @@ class NotificationService(
     /**
      * 发送文字版每日汇总（降级方案）
      */
-    private fun sendDailySummaryText(telegramId: Long, todayAnimes: List<TodayAnimeInfo>) {
+    private fun sendDailySummaryText(telegramId: Long, todayAnimes: List<TodayAnimeInfo>) { // todo 移除fallback
         val sb = StringBuilder("今日追番更新 (${todayAnimes.size} 部):\n\n")
         todayAnimes.forEachIndexed { index, anime ->
             val name = anime.nameCn?.takeIf { it.isNotBlank() } ?: anime.name

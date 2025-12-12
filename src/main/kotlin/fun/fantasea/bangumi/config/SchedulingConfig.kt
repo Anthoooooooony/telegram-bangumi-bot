@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.TaskScheduler
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler
+import java.util.concurrent.ThreadPoolExecutor
 
 /**
  * 任务调度配置
@@ -22,9 +23,8 @@ class SchedulingConfig(
         val scheduler = ThreadPoolTaskScheduler()
         scheduler.poolSize = poolSize
         scheduler.setThreadNamePrefix("notification-scheduler-")
-        scheduler.setRejectedExecutionHandler { _, executor ->
-            log.warn("通知任务被拒绝，队列已满: executor={}", executor)
-        }
+        // 使用 CallerRunsPolicy 确保任务不丢失，由调用线程执行被拒绝的任务
+        scheduler.setRejectedExecutionHandler(ThreadPoolExecutor.CallerRunsPolicy())
         scheduler.setErrorHandler { throwable ->
             log.error("通知任务执行异常: {}", throwable.message, throwable)
         }

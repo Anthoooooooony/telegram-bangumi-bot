@@ -82,7 +82,7 @@ class DailySummaryTask(
      * 发送汇总给用户
      * @param summaryTime 用户配置的汇总时间，用于计算 24h 时间窗口
      */
-    private suspend fun sendSummaryToUser(telegramId: Long, todayAiringIds: Set<Int>, summaryTime: LocalTime) {
+    private suspend fun sendSummaryToUser(telegramId: Long, todayAiringIds: Set<Int>, summaryTime: LocalTime) { // todo 确定具体播送时间
         // 获取用户的订阅
         val subscriptions = subscriptionRepository.findByUserTelegramId(telegramId)
 

@@ -74,7 +74,7 @@ class UserService(
      * 解绑 Bangumi Token
      */
     fun unbindToken(telegramId: Long): Boolean {
-        val user = userRepository.findByTelegramId(telegramId) ?: return false
+        val user = userRepository.findByTelegramId(telegramId) ?: return false // todo 用 exception 代替
 
         user.bangumiToken = null
         user.bangumiUserId = null
@@ -116,7 +116,7 @@ class UserService(
 /**
  * Token 绑定结果
  */
-data class BindResult(
+data class BindResult( // todo 移除，使用 exception. 用 “可恢复 exception” 代替
     val success: Boolean,
     val bangumiUsername: String? = null,
     val bangumiNickname: String? = null,

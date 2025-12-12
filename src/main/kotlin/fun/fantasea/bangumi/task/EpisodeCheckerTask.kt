@@ -2,6 +2,7 @@ package `fun`.fantasea.bangumi.task
 
 import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.client.Episode
+import `fun`.fantasea.bangumi.entity.Subscription
 import `fun`.fantasea.bangumi.repository.SubscriptionRepository
 import `fun`.fantasea.bangumi.service.EpisodeInfo
 import `fun`.fantasea.bangumi.service.NotificationService
@@ -57,7 +58,7 @@ class EpisodeCheckerTask(
 
     private suspend fun checkSubjectEpisodes(
         subjectId: Int,
-        subscriptions: List<`fun`.fantasea.bangumi.entity.Subscription>
+        subscriptions: List<Subscription>
     ) {
         // 获取剧集列表
         val episodes = bangumiClient.getEpisodes(subjectId)
@@ -77,31 +78,31 @@ class EpisodeCheckerTask(
         for (subscription in subscriptions) {
             val lastNotified = subscription.lastNotifiedEp
 
-            if (latestAiredEp > lastNotified) {
-                // 收集所有未通知的新剧集
-                val newEpisodes = airedEpisodes
-                    .filter { it.sort.toInt() > lastNotified }
-                    .map { ep ->
-                        EpisodeInfo(
-                            epNumber = ep.ep?.toInt() ?: ep.sort.toInt(),
-                            sortNumber = ep.sort.toInt(),
-                            name = ep.nameCn?.takeIf { it.isNotBlank() } ?: ep.name
-                        )
-                    }
-                    .sortedBy { it.sortNumber }
+            if (latestAiredEp <= lastNotified) continue
 
-                if (newEpisodes.isNotEmpty()) {
-                    notificationService.sendNewEpisodeNotification(
-                        telegramId = subscription.user.telegramId,
-                        subscription = subscription,
-                        episodes = newEpisodes
+            // 收集所有未通知的新剧集
+            val newEpisodes = airedEpisodes
+                .filter { it.sort.toInt() > lastNotified }
+                .map { ep ->
+                    EpisodeInfo(
+                        epNumber = ep.ep?.toInt() ?: ep.sort.toInt(),
+                        sortNumber = ep.sort.toInt(),
+                        name = ep.nameCn?.takeIf { it.isNotBlank() } ?: ep.name
                     )
                 }
+                .sortedBy { it.sortNumber }
 
-                // 更新已通知集数为最新（使用 sort 作为唯一标识进行比较）
-                subscriptionService.markNotified(subscription.id!!, latestAiredEp)
-                subscriptionService.updateLatestEpisode(subscription.id!!, latestAiredEp)
+            if (newEpisodes.isNotEmpty()) {
+                notificationService.sendNewEpisodeNotification(
+                    telegramId = subscription.user.telegramId,
+                    subscription = subscription,
+                    episodes = newEpisodes
+                )
             }
+
+            // 更新已通知集数为最新（使用 sort 作为唯一标识进行比较）
+            subscriptionService.markNotified(subscription.id!!, latestAiredEp)
+            subscriptionService.updateLatestEpisode(subscription.id!!, latestAiredEp)
         }
     }
 
@@ -114,6 +115,7 @@ class EpisodeCheckerTask(
             val episodeDate = LocalDate.parse(airdate)
             !episodeDate.isAfter(today)
         } catch (e: Exception) {
+            // todo 添加 log
             false
         }
     }

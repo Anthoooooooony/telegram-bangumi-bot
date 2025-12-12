@@ -1,6 +1,7 @@
 package `fun`.fantasea.bangumi.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import okhttp3.OkHttpClient
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -20,18 +21,19 @@ class TelegramBotConfig(
 ) {
 
     @Bean
-    fun telegramBotsApplication(): TelegramBotsLongPollingApplication {
+    fun telegramBotsApplication(jacksonObjectMapper: ObjectMapper): TelegramBotsLongPollingApplication {
         // Long polling 的 GetUpdates 默认超时 50 秒，readTimeout 需大于此值
-        val builder = OkHttpClient.Builder()
+        val httpClientBuilder = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(75, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
 
+        // 配置代理
         if (proxyHost.isNotBlank() && proxyPort > 0) {
             val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort))
-            builder.proxy(proxy)
+            httpClientBuilder.proxy(proxy)
         }
 
-        return TelegramBotsLongPollingApplication({ ObjectMapper() }, { builder.build() })
+        return TelegramBotsLongPollingApplication({ jacksonObjectMapper() }, { httpClientBuilder.build() })
     }
 }

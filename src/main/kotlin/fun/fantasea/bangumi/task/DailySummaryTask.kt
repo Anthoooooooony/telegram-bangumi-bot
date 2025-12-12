@@ -65,7 +65,7 @@ class DailySummaryTask(
 
                 for (user in users) {
                     try {
-                        sendSummaryToUser(user.telegramId, todayItems.map { it.id }.toSet())
+                        sendSummaryToUser(user.telegramId, todayItems.map { it.id }.toSet(), user.dailySummaryTime)
                         sentToday.add(user.id!!)
                     } catch (e: Exception) {
                         log.warn("发送每日汇总失败: telegramId={}, error={}", user.telegramId, e.message)
@@ -77,43 +77,64 @@ class DailySummaryTask(
         }
     }
 
-    private suspend fun sendSummaryToUser(telegramId: Long, todayAiringIds: Set<Int>) {
+    /**
+     * 发送汇总给用户
+     * @param summaryTime 用户配置的汇总时间，用于计算 24h 时间窗口
+     */
+    private suspend fun sendSummaryToUser(telegramId: Long, todayAiringIds: Set<Int>, summaryTime: LocalTime) {
         // 获取用户的订阅
         val subscriptions = subscriptionRepository.findByUserTelegramId(telegramId)
 
         // 筛选出今日有更新的订阅
         val todaySubscriptions = subscriptions.filter { it.subjectId in todayAiringIds }
+
+        // 计算 24h 时间窗口的日期范围
+        // 汇总时间窗口: (今天 summaryTime - 24h) 到 (今天 summaryTime)
+        // 由于 airdate 只有日期没有时间，我们取窗口覆盖的两个日期
         val today = LocalDate.now()
+        val yesterday = today.minusDays(1)
+        val validDates = setOf(yesterday.toString(), today.toString())
 
         // 获取封面图和剧集信息
-        val todayAnimes = todaySubscriptions.map { sub ->
+        val todayAnimes = todaySubscriptions.mapNotNull { sub ->
             var coverUrl: String? = null
             var airInfo: String? = null
+            var hasRecentEpisode = false
 
             try {
                 // 获取封面
                 coverUrl = bangumiClient.getSubject(sub.subjectId).images?.common
 
-                // 获取剧集信息，找出今日更新的集数
+                // 获取剧集信息，找出 24h 窗口内更新的集数
                 val episodes = bangumiClient.getEpisodes(sub.subjectId)
-                val todayEpisode = episodes.data
+                val recentEpisode = episodes.data
                     .filter { it.type == 0 }  // 本篇
-                    .filter { it.airdate == today.toString() }
+                    .filter { it.airdate in validDates }
                     .maxByOrNull { it.sort }
 
-                if (todayEpisode != null) {
-                    val epNum = todayEpisode.ep?.toInt() ?: todayEpisode.sort.toInt()
+                if (recentEpisode != null) {
+                    hasRecentEpisode = true
+                    val epNum = recentEpisode.ep?.toInt() ?: recentEpisode.sort.toInt()
                     airInfo = "第 $epNum 集"
                 }
             } catch (e: Exception) {
                 log.debug("获取番剧信息失败: subjectId={}, error={}", sub.subjectId, e.message)
             }
 
-            TodayAnimeInfo(sub.subjectId, sub.subjectName, sub.subjectNameCn, coverUrl, airInfo)
+            // 只返回在 24h 窗口内有更新的番剧
+            if (hasRecentEpisode) {
+                TodayAnimeInfo(sub.subjectId, sub.subjectName, sub.subjectNameCn, coverUrl, airInfo)
+            } else {
+                null
+            }
         }
 
-        notificationService.sendDailySummary(telegramId, todayAnimes)
-        log.info("已发送每日汇总: telegramId={}, count={}", telegramId, todayAnimes.size)
+        if (todayAnimes.isNotEmpty()) {
+            notificationService.sendDailySummary(telegramId, todayAnimes)
+            log.info("已发送每日汇总: telegramId={}, count={}", telegramId, todayAnimes.size)
+        } else {
+            log.debug("用户 {} 在 24h 窗口内无更新，跳过汇总", telegramId)
+        }
     }
 
     /**

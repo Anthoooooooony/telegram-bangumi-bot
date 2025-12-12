@@ -128,6 +128,7 @@ class BangumiBot(
             } catch (e: Exception) {
                 val updateJson = jacksonObjectMapper().writeValueAsString(update)
                 log.error("处理消息失败: {}", updateJson, e)
+                sendMessage(chatId, "处理请求时出错，请稍后重试。")
             }
         }
     }

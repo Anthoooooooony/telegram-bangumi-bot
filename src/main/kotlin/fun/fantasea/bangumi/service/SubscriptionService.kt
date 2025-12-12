@@ -9,6 +9,7 @@ import `fun`.fantasea.bangumi.repository.UserRepository
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 import java.time.LocalDateTime
 
@@ -23,6 +24,7 @@ class SubscriptionService(
     private val animeRepository: AnimeRepository,
     private val bangumiClient: BangumiClient,
     private val userService: UserService,
+    private val transactionTemplate: TransactionTemplate,
     @param:Lazy private val animeService: AnimeService,
     @param:Lazy private val scheduledNotificationService: ScheduledNotificationService
 ) {
@@ -107,11 +109,14 @@ class SubscriptionService(
                     }
                 }
 
-                subscriptionRepository.save(subscription)
+                // 使用事务确保保存订阅和调度通知的原子性
+                transactionTemplate.execute {
+                    subscriptionRepository.save(subscription)
 
-                // 为有 BangumiData 时间信息的新订阅安排通知
-                if (isNewSubscription && anime.hasBangumiData) {
-                    scheduledNotificationService.scheduleNextNotification(subscription)
+                    // 为有 BangumiData 时间信息的新订阅安排通知
+                    if (isNewSubscription && anime.hasBangumiData) {
+                        scheduledNotificationService.scheduleNextNotification(subscription)
+                    }
                 }
 
                 syncedCount++

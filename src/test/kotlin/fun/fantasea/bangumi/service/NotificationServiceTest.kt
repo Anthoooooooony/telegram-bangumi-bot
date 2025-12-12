@@ -45,7 +45,7 @@ class NotificationServiceTest {
         // given
         val telegramId = 123456789L
         val subscription = createSubscription()
-        val episodes = listOf(EpisodeInfo(epNumber = 5, sortNumber = 5, name = "测试标题"))
+        val episodes = listOf(EpisodeInfo(epNumber = 5, name = "测试标题"))
         val imageData = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47) // PNG header
 
         coEvery { bangumiClient.getSubject(100) } returns SubjectDetail(
@@ -87,9 +87,9 @@ class NotificationServiceTest {
         val telegramId = 123456789L
         val subscription = createSubscription()
         val episodes = listOf(
-            EpisodeInfo(epNumber = 5, sortNumber = 5, name = null),
-            EpisodeInfo(epNumber = 6, sortNumber = 6, name = null),
-            EpisodeInfo(epNumber = 7, sortNumber = 7, name = null)
+            EpisodeInfo(epNumber = 5, name = null),
+            EpisodeInfo(epNumber = 6, name = null),
+            EpisodeInfo(epNumber = 7, name = null)
         )
         val imageData = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
 

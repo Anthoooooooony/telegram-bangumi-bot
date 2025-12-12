@@ -230,7 +230,7 @@ class BangumiBot(
                             !LocalDate.parse(airdate).isAfter(today)
                         } catch (e: Exception) { false }
                     }
-                    .maxOfOrNull { it.ep?.toInt() ?: it.sort.toInt() }
+                    .maxOfOrNull { it.sort.toInt() }
             } catch (e: Exception) {
                 throw RuntimeException("获取番剧信息失败: subjectId=${sub.subjectId}", e)
             }

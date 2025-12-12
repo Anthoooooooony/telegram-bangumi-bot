@@ -180,8 +180,8 @@ data class Episode(
     val type: Int,
     val name: String,
     @field:JsonProperty("name_cn") val nameCn: String?,
-    val sort: Double,
-    val ep: Double?, // todo 明确 ep 和 sort 的使用
+    val sort: Double,  // 全局集数（跨季累计），用于排序和比较
+    val ep: Double?,   // 本季集数，仅用于 API 兼容，项目中统一使用 sort
     val airdate: String?,
     val desc: String?
 )

@@ -115,7 +115,7 @@ class DailySummaryTask(
 
                 if (recentEpisode != null) {
                     hasRecentEpisode = true
-                    val epNum = recentEpisode.ep?.toInt() ?: recentEpisode.sort.toInt()
+                    val epNum = recentEpisode.sort.toInt()
                     airInfo = "第 $epNum 集"
                 }
             } catch (e: Exception) {

@@ -207,7 +207,6 @@ data class TodayAnimeInfo(
  * 剧集信息（用于通知）
  */
 data class EpisodeInfo(
-    val epNumber: Int,      // 本季集数（显示用）
-    val sortNumber: Int,    // 全局集数（比较用）
+    val epNumber: Int,      // 集数（使用 API 的 sort 字段，全局集数）
     val name: String?       // 剧集名称
 )

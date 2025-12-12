@@ -85,12 +85,11 @@ class EpisodeCheckerTask(
                 .filter { it.sort.toInt() > lastNotified }
                 .map { ep ->
                     EpisodeInfo(
-                        epNumber = ep.ep?.toInt() ?: ep.sort.toInt(),
-                        sortNumber = ep.sort.toInt(),
+                        epNumber = ep.sort.toInt(),
                         name = ep.nameCn?.takeIf { it.isNotBlank() } ?: ep.name
                     )
                 }
-                .sortedBy { it.sortNumber }
+                .sortedBy { it.epNumber }
 
             if (newEpisodes.isNotEmpty()) {
                 notificationService.sendNewEpisodeNotification(

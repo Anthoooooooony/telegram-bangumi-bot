@@ -262,7 +262,8 @@ class BangumiBot(
                                 !LocalDate.parse(airdate).isAfter(today)
                             } catch (e: Exception) { false }
                         }
-                        .maxOfOrNull { it.sort.toInt() }
+                        .mapNotNull { it.ep?.toInt() }
+                        .maxOrNull()
 
                     SubscriptionAnime(
                         name = name,

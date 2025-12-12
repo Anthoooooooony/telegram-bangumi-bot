@@ -68,6 +68,10 @@ class SubscriptionServiceTest {
         every { userRepository.findByTelegramId(123456789L) } returns testUser
         every { userService.getDecryptedToken(123456789L) } returns token
         coEvery { bangumiClient.getUserCollections("bgmuser", token) } returns collectionResponse
+        coEvery { bangumiClient.getEpisodes(any(), any()) } returns EpisodeResponse(
+            total = 0,
+            data = emptyList()
+        )
         every { subscriptionRepository.findByUserAndSubjectId(testUser, any()) } returns null
         every { subscriptionRepository.save(any()) } answers { firstArg() }
 

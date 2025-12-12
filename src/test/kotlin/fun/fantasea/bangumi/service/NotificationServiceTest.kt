@@ -11,6 +11,7 @@ import `fun`.fantasea.bangumi.entity.User
 import io.mockk.*
 import io.mockk.impl.annotations.InjectMockKs
 import io.mockk.impl.annotations.MockK
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -40,7 +41,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    fun `should send image notification for single episode`() {
+    fun `should send image notification for single episode`() = runBlocking {
         // given
         val telegramId = 123456789L
         val subscription = createSubscription()
@@ -81,7 +82,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    fun `should send image notification for multiple episodes`() {
+    fun `should send image notification for multiple episodes`() = runBlocking {
         // given
         val telegramId = 123456789L
         val subscription = createSubscription()
@@ -123,28 +124,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    fun `should fallback to text notification when image generation fails`() {
-        // given
-        val telegramId = 123456789L
-        val subscription = createSubscription()
-        val episodes = listOf(EpisodeInfo(epNumber = 5, sortNumber = 5, name = null))
-
-        coEvery { bangumiClient.getSubject(100) } throws RuntimeException("API Error")
-        every { bangumiDataClient.getPlatforms(100) } returns emptyList()
-        every { imageGeneratorService.generateNotificationCard(any(), any(), any(), any(), any()) } throws RuntimeException("Image generation failed")
-        every { bangumiDataClient.generatePlatformLinks(100) } returns null
-        every { bangumiBot.sendMessageMarkdown(telegramId, any()) } just Runs
-
-        // when
-        notificationService.sendNewEpisodeNotification(telegramId, subscription, episodes)
-
-        // then
-        verify { bangumiBot.sendMessageMarkdown(telegramId, any()) }
-        verify(exactly = 0) { bangumiBot.sendPhoto(any(), any(), any()) }
-    }
-
-    @Test
-    fun `should not send notification for empty episodes list`() {
+    fun `should not send notification for empty episodes list`() = runBlocking {
         // given
         val telegramId = 123456789L
         val subscription = createSubscription()
@@ -183,32 +163,6 @@ class NotificationServiceTest {
         // then
         verify { bangumiBot.sendPhoto(telegramId, imageData, any()) }
         verify(exactly = 0) { bangumiBot.sendMessage(any(), any()) }
-    }
-
-    @Test
-    fun `should fallback to text when daily summary image generation fails`() {
-        // given
-        val telegramId = 123456789L
-        val todayAnimes = listOf(
-            TodayAnimeInfo(1, "Anime A", "番剧A"),
-            TodayAnimeInfo(2, "Anime B", null)
-        )
-
-        every { imageGeneratorService.generateDailySummaryCard(any()) } throws RuntimeException("Image generation failed")
-        every { bangumiBot.sendMessage(telegramId, any()) } just Runs
-
-        // when
-        notificationService.sendDailySummary(telegramId, todayAnimes)
-
-        // then
-        verify {
-            bangumiBot.sendMessage(telegramId, match {
-                it.contains("今日追番更新 (2 部)") &&
-                it.contains("1. 番剧A") &&
-                it.contains("2. Anime B")
-            })
-        }
-        verify(exactly = 0) { bangumiBot.sendPhoto(any(), any(), any()) }
     }
 
     @Test

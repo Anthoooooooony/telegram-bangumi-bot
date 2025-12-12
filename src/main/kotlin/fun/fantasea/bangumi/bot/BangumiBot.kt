@@ -23,6 +23,7 @@ import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.InputFile
 import java.io.ByteArrayInputStream
@@ -328,7 +329,7 @@ class BangumiBot(
     }
 
     /**
-     * 编辑已发送的消息
+     * 编辑已发送的文本消息
      */
     private fun editMessage(chatId: Long, messageId: Int, text: String) {
         try {
@@ -340,6 +341,22 @@ class BangumiBot(
             telegramClient.execute(edit)
         } catch (e: Exception) {
             log.error("编辑消息失败: {}", e.message, e)
+        }
+    }
+
+    /**
+     * 编辑已发送的媒体消息的 caption
+     */
+    private fun editCaption(chatId: Long, messageId: Int, caption: String) {
+        try {
+            val edit = EditMessageCaption.builder()
+                .chatId(chatId)
+                .messageId(messageId)
+                .caption(caption)
+                .build()
+            telegramClient.execute(edit)
+        } catch (e: Exception) {
+            log.error("编辑 caption 失败: {}", e.message, e)
         }
     }
 

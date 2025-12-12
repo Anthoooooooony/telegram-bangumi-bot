@@ -12,6 +12,8 @@ import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
@@ -216,45 +218,45 @@ class BangumiBot(
         val messageId = sendMessageAndGetId(chatId, "正在生成追番列表...")
 
         val today = LocalDate.now()
-        // 获取每个订阅的封面图和当前已播出集数（使用缓存）
+        // 并发获取每个订阅的封面图和当前已播出集数（使用缓存）
         val animes = subscriptions.map { sub ->
-            val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
-            var coverUrl: String?
-            var latestAiredEp: Int?
+            scope.async {
+                val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
+                try {
+                    // 优先从缓存获取番剧详情
+                    val subject = bangumiCacheService.getSubject(sub.subjectId)
+                        ?: bangumiClient.getSubject(sub.subjectId).also {
+                            bangumiCacheService.putSubject(sub.subjectId, it)
+                        }
+                    val coverUrl = subject.images?.common
 
-            try {
-                // 优先从缓存获取番剧详情
-                val subject = bangumiCacheService.getSubject(sub.subjectId)
-                    ?: bangumiClient.getSubject(sub.subjectId).also {
-                        bangumiCacheService.putSubject(sub.subjectId, it)
-                    }
-                coverUrl = subject.images?.common
+                    // 优先从缓存获取剧集列表
+                    val episodes = bangumiCacheService.getEpisodes(sub.subjectId)
+                        ?: bangumiClient.getEpisodes(sub.subjectId).also {
+                            bangumiCacheService.putEpisodes(sub.subjectId, it)
+                        }
+                    val latestAiredEp = episodes.data
+                        .filter { it.type == 0 }
+                        .filter { ep ->
+                            val airdate = ep.airdate ?: return@filter false
+                            try {
+                                !LocalDate.parse(airdate).isAfter(today)
+                            } catch (e: Exception) { false }
+                        }
+                        .maxOfOrNull { it.sort.toInt() }
 
-                // 优先从缓存获取剧集列表
-                val episodes = bangumiCacheService.getEpisodes(sub.subjectId)
-                    ?: bangumiClient.getEpisodes(sub.subjectId).also {
-                        bangumiCacheService.putEpisodes(sub.subjectId, it)
-                    }
-                latestAiredEp = episodes.data
-                    .filter { it.type == 0 }
-                    .filter { ep ->
-                        val airdate = ep.airdate ?: return@filter false
-                        try {
-                            !LocalDate.parse(airdate).isAfter(today)
-                        } catch (e: Exception) { false }
-                    }
-                    .maxOfOrNull { it.sort.toInt() }
-            } catch (e: Exception) {
-                throw RuntimeException("获取番剧信息失败: subjectId=${sub.subjectId}", e)
+                    SubscriptionAnime(
+                        name = name,
+                        coverUrl = coverUrl,
+                        totalEpisodes = sub.totalEpisodes,
+                        latestAiredEp = latestAiredEp
+                    )
+                } catch (e: Exception) {
+                    log.warn("获取番剧信息失败: subjectId=${sub.subjectId}", e)
+                    null
+                }
             }
-
-            SubscriptionAnime(
-                name = name,
-                coverUrl = coverUrl,
-                totalEpisodes = sub.totalEpisodes,
-                latestAiredEp = latestAiredEp
-            )
-        }
+        }.awaitAll().filterNotNull()
 
         val imageData = imageGeneratorService.generateSubscriptionListCard(animes)
         deleteMessage(chatId, messageId)

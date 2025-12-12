@@ -105,28 +105,39 @@ class ImageGeneratorService(
     }
 
     private fun drawBackground(g2d: Graphics2D, coverUrl: String?) {
-        if (!coverUrl.isNullOrBlank()) {
-            try {
-                val coverImage = loadCoverImage(coverUrl)
-                if (coverImage != null) {
-                    // Cover 模式：缩放填满卡片
-                    val scale = maxOf(
-                        CARD_WIDTH.toDouble() / coverImage.width,
-                        CARD_HEIGHT.toDouble() / coverImage.height
-                    )
-                    val scaledWidth = (coverImage.width * scale).toInt()
-                    val scaledHeight = (coverImage.height * scale).toInt()
-                    val x = (CARD_WIDTH - scaledWidth) / 2
-                    val y = (CARD_HEIGHT - scaledHeight) / 2
-                    g2d.drawImage(coverImage, x, y, scaledWidth, scaledHeight, null)
-                    return
-                }
-            } catch (e: Exception) {
-                log.debug("加载封面图失败: {}", e.message)
-            }
+        // 无封面 URL 时 fallback
+        if (coverUrl.isNullOrBlank()) {
+            drawFallbackBackground(g2d)
+            return
         }
 
-        // 降级为纯色背景
+        // 尝试加载封面图
+        val coverImage = try {
+            loadCoverImage(coverUrl)
+        } catch (e: Exception) {
+            log.debug("加载封面图失败: {}", e.message)
+            null
+        }
+
+        // 封面加载失败时 fallback
+        if (coverImage == null) {
+            drawFallbackBackground(g2d)
+            return
+        }
+
+        // Cover 模式：缩放填满卡片
+        val scale = maxOf(
+            CARD_WIDTH.toDouble() / coverImage.width,
+            CARD_HEIGHT.toDouble() / coverImage.height
+        )
+        val scaledWidth = (coverImage.width * scale).toInt()
+        val scaledHeight = (coverImage.height * scale).toInt()
+        val x = (CARD_WIDTH - scaledWidth) / 2
+        val y = (CARD_HEIGHT - scaledHeight) / 2
+        g2d.drawImage(coverImage, x, y, scaledWidth, scaledHeight, null)
+    }
+
+    private fun drawFallbackBackground(g2d: Graphics2D) {
         g2d.color = FALLBACK_BG
         g2d.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
     }

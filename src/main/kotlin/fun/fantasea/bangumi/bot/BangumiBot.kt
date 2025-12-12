@@ -78,9 +78,9 @@ class BangumiBot(
         val commands = listOf(
             BotCommand("start", "开始使用"),
             BotCommand("bindtoken", "绑定 Bangumi token"),
-            BotCommand("unbind", "解除绑定"),
             BotCommand("list", "显示追番列表"),
-            BotCommand("status", "查看绑定状态")
+            BotCommand("status", "查看绑定状态"),
+            BotCommand("unbind", "解除绑定")
         )
 
         try {

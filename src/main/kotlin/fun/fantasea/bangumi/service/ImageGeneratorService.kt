@@ -15,6 +15,8 @@ import javax.imageio.ImageIO
 /**
  * 图片生成服务
  * 使用 Java2D 绘制通知卡片
+ *
+ * todo 有多个重复的绘制 pattern 可以合并复用
  */
 @Service
 class ImageGeneratorService(
@@ -25,15 +27,7 @@ class ImageGeneratorService(
     companion object {
         private const val CARD_WIDTH = 400
         private const val CARD_HEIGHT = 200
-
-        // 颜色定义
-        private val ACCENT_COLOR = Color(255, 107, 107)        // 新剧集通知 - 红色
-        private val SUMMARY_ACCENT_COLOR = Color(100, 180, 255) // 每日汇总 - 蓝色
-        private val TEXT_PRIMARY = Color.WHITE
-        private val TEXT_SECONDARY = Color(220, 220, 230)
-        private val TEXT_MUTED = Color(160, 160, 180)
-        private val OVERLAY_DARK = Color(20, 20, 30)
-        private val FALLBACK_BG = Color(30, 30, 45)
+        private const val ITEM_RADIUS = 12f
 
         // 优先使用的中文字体列表
         private val PREFERRED_FONTS = listOf(
@@ -46,6 +40,17 @@ class ImageGeneratorService(
             "SimHei",               // Windows fallback
             "SansSerif"             // 最终 fallback
         )
+    }
+
+    /** 颜色定义 */
+    private object Colors {
+        val ACCENT = Color(255, 107, 107)           // 新剧集通知 - 红色
+        val SUMMARY_ACCENT = Color(100, 180, 255)   // 每日汇总 - 蓝色
+        val TEXT_PRIMARY = Color.WHITE
+        val TEXT_SECONDARY = Color(220, 220, 230)
+        val TEXT_MUTED = Color(160, 160, 180)
+        val OVERLAY_DARK = Color(20, 20, 30)
+        val FALLBACK_BG = Color(30, 30, 45)
     }
 
     // 缓存可用的字体名称，避免每次调用都扫描系统字体
@@ -138,23 +143,31 @@ class ImageGeneratorService(
     }
 
     private fun drawFallbackBackground(g2d: Graphics2D) {
-        g2d.color = FALLBACK_BG
+        g2d.color = Colors.FALLBACK_BG
         g2d.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
     }
 
     private fun drawOverlay(g2d: Graphics2D) {
         // 左到右渐变遮罩
         val overlay = GradientPaint(
-            0f, 0f, Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, 240),
-            CARD_WIDTH * 0.7f, 0f, Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, 160)
+            0f,
+            0f,
+            Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, 240),
+            CARD_WIDTH * 0.7f,
+            0f,
+            Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, 160)
         )
         g2d.paint = overlay
         g2d.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
 
         // 底部额外加深
         val bottomOverlay = GradientPaint(
-            0f, CARD_HEIGHT * 0.6f, Color(0, 0, 0, 0),
-            0f, CARD_HEIGHT.toFloat(), Color(0, 0, 0, 150)
+            0f,
+            CARD_HEIGHT * 0.6f,
+            Color(0, 0, 0, 0),
+            0f,
+            CARD_HEIGHT.toFloat(),
+            Color(0, 0, 0, 150)
         )
         g2d.paint = bottomOverlay
         g2d.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
@@ -171,38 +184,38 @@ class ImageGeneratorService(
         var y = 30
 
         // 左侧装饰条
-        g2d.color = ACCENT_COLOR
+        g2d.color = Colors.ACCENT
         g2d.fillRoundRect(0, 0, 5, CARD_HEIGHT, 5, 5)
 
         // 标题: 新剧集更新
-        g2d.color = ACCENT_COLOR
+        g2d.color = Colors.ACCENT
         g2d.font = getFont(Font.BOLD, 13)
         g2d.drawString("新剧集更新", leftMargin, y)
         y += 40
 
         // 番剧名称
-        g2d.color = TEXT_PRIMARY
+        g2d.color = Colors.TEXT_PRIMARY
         g2d.font = getFont(Font.BOLD, 24)
         val displayName = truncateText(g2d, animeName, CARD_WIDTH - leftMargin * 2)
         g2d.drawString(displayName, leftMargin, y)
         y += 30
 
         // 集数
-        g2d.color = TEXT_SECONDARY
+        g2d.color = Colors.TEXT_SECONDARY
         g2d.font = getFont(Font.PLAIN, 16)
         g2d.drawString(episodeText, leftMargin, y)
         y += 25
 
         // 剧集名（如果有）
         if (!episodeName.isNullOrBlank()) {
-            g2d.color = TEXT_MUTED
+            g2d.color = Colors.TEXT_MUTED
             g2d.font = getFont(Font.PLAIN, 14)
             val displayEpName = truncateText(g2d, episodeName, CARD_WIDTH - leftMargin * 2)
             g2d.drawString(displayEpName, leftMargin, y)
         }
 
         // 播放平台
-        g2d.color = TEXT_MUTED
+        g2d.color = Colors.TEXT_MUTED
         g2d.font = getFont(Font.PLAIN, 12)
         if (platforms.isNotEmpty()) {
             val platformText = platforms.joinToString(" · ") { it.name }
@@ -239,7 +252,7 @@ class ImageGeneratorService(
             setupRenderingHints(g2d)
 
             // 绘制纯色背景
-            g2d.color = FALLBACK_BG
+            g2d.color = Colors.FALLBACK_BG
             g2d.fillRect(0, 0, CARD_WIDTH, cardHeight)
 
             // 绘制内容
@@ -267,12 +280,12 @@ class ImageGeneratorService(
         var y = 25
 
         // 标题行
-        g2d.color = SUMMARY_ACCENT_COLOR
+        g2d.color = Colors.SUMMARY_ACCENT
         g2d.font = getFont(Font.BOLD, 16)
         g2d.drawString("今日追番更新", margin, y)
 
         // 数量（右侧）
-        g2d.color = TEXT_MUTED
+        g2d.color = Colors.TEXT_MUTED
         g2d.font = getFont(Font.PLAIN, 14)
         val countText = "${animes.size} 部"
         val countWidth = g2d.fontMetrics.stringWidth(countText)
@@ -284,19 +297,27 @@ class ImageGeneratorService(
         val displayAnimes = animes.take(maxItems)
 
         displayAnimes.forEachIndexed { index, anime ->
-            drawAnimeItem(g2d, anime, margin, y, CARD_WIDTH - margin * 2, itemHeight, index + 1)
+            drawAnimeItem(
+                g2d,
+                anime,
+                margin,
+                y,
+                CARD_WIDTH - margin * 2,
+                itemHeight,
+                index + 1
+            )
             y += itemHeight + itemGap
         }
 
         // 如果有更多番剧，显示省略提示
         if (animes.size > maxItems) {
-            g2d.color = TEXT_MUTED
+            g2d.color = Colors.TEXT_MUTED
             g2d.font = getFont(Font.PLAIN, 13)
             g2d.drawString("... 还有 ${animes.size - maxItems} 部番剧", margin, y + 15)
         }
 
         // 时间戳
-        g2d.color = TEXT_MUTED
+        g2d.color = Colors.TEXT_MUTED
         g2d.font = getFont(Font.PLAIN, 11)
         val timeText = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
         val timeWidth = g2d.fontMetrics.stringWidth(timeText)
@@ -308,10 +329,17 @@ class ImageGeneratorService(
      */
     private fun drawAnimeItem(g2d: Graphics2D, anime: DailySummaryAnime, x: Int, y: Int, width: Int, height: Int, index: Int) {
         val originalClip = g2d.clip
-        val itemRadius = 12f
+        val itemRadius = ITEM_RADIUS
 
         // 创建圆角裁剪区域
-        val itemRect = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), itemRadius, itemRadius)
+        val itemRect = RoundRectangle2D.Float(
+            x.toFloat(),
+            y.toFloat(),
+            width.toFloat(),
+            height.toFloat(),
+            itemRadius,
+            itemRadius
+        )
         g2d.clip = itemRect
 
         // 尝试绘制封面背景（使用缓存）
@@ -342,8 +370,8 @@ class ImageGeneratorService(
 
         // 绘制渐变遮罩（从左到右）
         val overlay = GradientPaint(
-            x.toFloat(), y.toFloat(), Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, 230),
-            (x + width * 0.7f), y.toFloat(), Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, if (hasCover) 100 else 180)
+            x.toFloat(), y.toFloat(), Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, 230),
+            (x + width * 0.7f), y.toFloat(), Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, if (hasCover) 100 else 180)
         )
         g2d.paint = overlay
         g2d.fillRect(x, y, width, height)
@@ -352,11 +380,11 @@ class ImageGeneratorService(
         g2d.clip = originalClip
 
         // 绘制左侧装饰条
-        g2d.color = SUMMARY_ACCENT_COLOR
+        g2d.color = Colors.SUMMARY_ACCENT
         g2d.fillRoundRect(x, y, 4, height, 4, 4)
 
         // 绘制序号
-        g2d.color = SUMMARY_ACCENT_COLOR
+        g2d.color = Colors.SUMMARY_ACCENT
         g2d.font = getFont(Font.BOLD, 14)
         g2d.drawString("$index", x + 14, y + height / 2 + 5)
 
@@ -365,14 +393,14 @@ class ImageGeneratorService(
         val maxTextWidth = width - 55
 
         // 绘制番剧名（上半部分）
-        g2d.color = TEXT_PRIMARY
+        g2d.color = Colors.TEXT_PRIMARY
         g2d.font = getFont(Font.BOLD, 16)
         val displayName = truncateText(g2d, anime.name, maxTextWidth)
         g2d.drawString(displayName, textX, y + 28)
 
         // 绘制更新信息（下半部分）
         if (!anime.airInfo.isNullOrBlank()) {
-            g2d.color = TEXT_MUTED
+            g2d.color = Colors.TEXT_MUTED
             g2d.font = getFont(Font.PLAIN, 13)
             g2d.drawString(anime.airInfo, textX, y + 50)
         }
@@ -448,7 +476,7 @@ class ImageGeneratorService(
         try {
             setupRenderingHints(g2d)
 
-            g2d.color = FALLBACK_BG
+            g2d.color = Colors.FALLBACK_BG
             g2d.fillRect(0, 0, CARD_WIDTH, cardHeight)
 
             drawSubscriptionListContent(g2d, animes, cardHeight, maxItems, itemHeight, itemGap, headerHeight)
@@ -481,7 +509,7 @@ class ImageGeneratorService(
         g2d.drawString("追番列表", margin, y)
 
         // 数量（右侧）
-        g2d.color = TEXT_MUTED
+        g2d.color = Colors.TEXT_MUTED
         g2d.font = getFont(Font.PLAIN, 14)
         val countText = "${animes.size} 部"
         val countWidth = g2d.fontMetrics.stringWidth(countText)
@@ -499,13 +527,13 @@ class ImageGeneratorService(
 
         // 如果有更多番剧，显示省略提示
         if (animes.size > maxItems) {
-            g2d.color = TEXT_MUTED
+            g2d.color = Colors.TEXT_MUTED
             g2d.font = getFont(Font.PLAIN, 13)
             g2d.drawString("... 还有 ${animes.size - maxItems} 部番剧", margin, y + 15)
         }
 
         // 时间戳
-        g2d.color = TEXT_MUTED
+        g2d.color = Colors.TEXT_MUTED
         g2d.font = getFont(Font.PLAIN, 11)
         val timeText = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
         val timeWidth = g2d.fontMetrics.stringWidth(timeText)
@@ -514,7 +542,7 @@ class ImageGeneratorService(
 
     private fun drawSubscriptionItem(g2d: Graphics2D, anime: SubscriptionAnime, x: Int, y: Int, width: Int, height: Int, index: Int, accentColor: Color) {
         val originalClip = g2d.clip
-        val itemRadius = 12f
+        val itemRadius = ITEM_RADIUS
 
         val itemRect = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), itemRadius, itemRadius)
         g2d.clip = itemRect
@@ -545,8 +573,8 @@ class ImageGeneratorService(
 
         // 渐变遮罩
         val overlay = GradientPaint(
-            x.toFloat(), y.toFloat(), Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, 230),
-            (x + width * 0.7f), y.toFloat(), Color(OVERLAY_DARK.red, OVERLAY_DARK.green, OVERLAY_DARK.blue, if (hasCover) 100 else 180)
+            x.toFloat(), y.toFloat(), Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, 230),
+            (x + width * 0.7f), y.toFloat(), Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, if (hasCover) 100 else 180)
         )
         g2d.paint = overlay
         g2d.fillRect(x, y, width, height)
@@ -567,13 +595,13 @@ class ImageGeneratorService(
         val maxTextWidth = width - 55
 
         // 番剧名
-        g2d.color = TEXT_PRIMARY
+        g2d.color = Colors.TEXT_PRIMARY
         g2d.font = getFont(Font.BOLD, 16)
         val displayName = truncateText(g2d, anime.name, maxTextWidth)
         g2d.drawString(displayName, textX, y + 28)
 
         // 集数信息：已播出 / 总集数
-        g2d.color = TEXT_MUTED
+        g2d.color = Colors.TEXT_MUTED
         g2d.font = getFont(Font.PLAIN, 13)
         val epInfo = buildString {
             if (anime.latestAiredEp != null && anime.latestAiredEp > 0) {

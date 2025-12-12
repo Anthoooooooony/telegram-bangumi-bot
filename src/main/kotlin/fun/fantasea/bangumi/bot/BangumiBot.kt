@@ -107,9 +107,10 @@ class BangumiBot(
         if (!update.hasMessage() || !update.message.hasText()) return
 
         val chatId = update.message.chatId
-        val userId = update.message.from.id
+        val from = update.message.from ?: return
+        val userId = from.id
         val text = update.message.text
-        val username = update.message.from.userName ?: update.message.from.firstName
+        val username = from.userName ?: from.firstName
 
         log.info("收到消息 from {} ({}): {}", username, userId, text)
 

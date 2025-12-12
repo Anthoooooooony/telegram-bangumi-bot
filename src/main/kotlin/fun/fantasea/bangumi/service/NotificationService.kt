@@ -3,8 +3,8 @@ package `fun`.fantasea.bangumi.service
 import `fun`.fantasea.bangumi.bot.BangumiBot
 import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.client.BangumiDataClient
+import `fun`.fantasea.bangumi.client.PlatformInfo
 import `fun`.fantasea.bangumi.entity.Subscription
-import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
@@ -15,18 +15,22 @@ import org.springframework.stereotype.Service
  */
 @Service
 class NotificationService(
-    @Lazy private val bangumiBot: BangumiBot,
+    @param:Lazy private val bangumiBot: BangumiBot,
     private val bangumiDataClient: BangumiDataClient,
     private val bangumiClient: BangumiClient,
     private val imageGeneratorService: ImageGeneratorService
 ) {
     private val log = LoggerFactory.getLogger(NotificationService::class.java)
 
+    companion object {
+        private const val MAX_PLATFORMS = 4
+    }
+
     /**
      * 发送新剧集通知（支持多集聚合）
      * @param episodes 新剧集列表，按集数排序
      */
-    fun sendNewEpisodeNotification(
+    suspend fun sendNewEpisodeNotification(
         telegramId: Long,
         subscription: Subscription,
         episodes: List<EpisodeInfo>
@@ -49,40 +53,39 @@ class NotificationService(
         log.info("发送新剧集通知: telegramId={}, anime={}, episodes={}",
             telegramId, animeName, episodes.map { it.epNumber })
 
-        try {
-            // 获取封面图
-            val coverUrl = runBlocking {
-                try {
-                    bangumiClient.getSubject(subscription.subjectId).images?.common
-                } catch (e: Exception) {
-                    log.warn("获取封面图失败: {}", e.message)
-                    null
-                }
-            }
+        // 获取封面图
+        val coverUrl = try {
+            bangumiClient.getSubject(subscription.subjectId).images?.common
+        } catch (e: Exception) {
+            throw RuntimeException("获取封面图失败: subjectId=${subscription.subjectId}", e)
+        }
 
-            // 获取播放平台
-            val platforms = bangumiDataClient.getPlatforms(subscription.subjectId)
-                .filter { it.regions == null || it.regions.contains("CN") }
-                .take(4)
+        // 获取播放平台
+        val platforms = bangumiDataClient.getPlatforms(subscription.subjectId)
+            .filter { it.regions == null || it.regions.contains("CN") }
+            .take(MAX_PLATFORMS)
 
-            // 生成图片
-            val imageData = imageGeneratorService.generateNotificationCard(
+        // 生成图片
+        val imageData = try {
+            imageGeneratorService.generateNotificationCard(
                 animeName = animeName,
                 episodeText = episodeText,
                 episodeName = episodeName,
                 coverUrl = coverUrl,
                 platforms = platforms
             )
+        } catch (e: Exception) {
+            throw RuntimeException("生成通知图片失败: subjectId=${subscription.subjectId}", e)
+        }
 
-            // 生成播放链接作为图片 caption
-            val caption = generatePlatformCaption(platforms)
+        // 生成播放链接作为图片 caption
+        val caption = generatePlatformCaption(platforms)
 
-            // 发送图片（带链接）
+        // 发送图片（带链接）
+        try {
             bangumiBot.sendPhoto(telegramId, imageData, caption)
         } catch (e: Exception) {
-            log.error("生成通知图片失败，降级为文字通知: {}", e.message)
-            // 降级为文字通知
-            sendTextNotification(telegramId, animeName, episodeText, episodeName, subscription.subjectId)
+            throw RuntimeException("发送通知图片失败: telegramId=$telegramId, subjectId=${subscription.subjectId}", e)
         }
     }
 
@@ -90,7 +93,7 @@ class NotificationService(
      * 生成播放平台链接 caption（MarkdownV2 格式）
      * 格式: [Bilibili](url)｜[动画疯](url)｜...
      */
-    private fun generatePlatformCaption(platforms: List<`fun`.fantasea.bangumi.client.PlatformInfo>): String? {
+    private fun generatePlatformCaption(platforms: List<PlatformInfo>): String? {
         if (platforms.isEmpty()) return null
 
         return platforms.joinToString("｜") { platform ->
@@ -100,32 +103,6 @@ class NotificationService(
                 .replace("(", "\\(")
             "[${escapeMarkdown(platform.name)}](${escapedUrl})"
         }
-    }
-
-    /**
-     * 发送文字通知（降级方案）
-     */
-    private fun sendTextNotification(
-        telegramId: Long,
-        animeName: String,
-        episodeText: String,
-        episodeName: String?,
-        subjectId: Int
-    ) {
-        val platformLinks = bangumiDataClient.generatePlatformLinks(subjectId)
-        val linksLine = platformLinks?.let { "\n\n直达链接：$it" } ?: ""
-
-        val safeAnimeName = escapeMarkdown(animeName)
-        val epInfo = episodeName?.takeIf { it.isNotBlank() }?.let { " \\- ${escapeMarkdown(it)}" } ?: ""
-
-        val message = """
-            *新剧集更新！*
-
-            $safeAnimeName
-            $episodeText$epInfo$linksLine
-        """.trimIndent()
-
-        bangumiBot.sendMessageMarkdown(telegramId, message)
     }
 
     /**
@@ -193,42 +170,25 @@ class NotificationService(
 
         log.info("发送每日汇总: telegramId={}, count={}", telegramId, todayAnimes.size)
 
+        // 转换为图片生成需要的格式
+        val animes = todayAnimes.map { anime ->
+            val name = anime.nameCn?.takeIf { it.isNotBlank() } ?: anime.name
+            DailySummaryAnime(name, anime.coverUrl, anime.airInfo)
+        }
+
+        // 生成图片
+        val imageData = try {
+            imageGeneratorService.generateDailySummaryCard(animes)
+        } catch (e: Exception) {
+            throw RuntimeException("生成每日汇总图片失败: telegramId=$telegramId", e)
+        }
+
+        // 发送图片
         try {
-            // 转换为图片生成需要的格式
-            val animes = todayAnimes.map { anime ->
-                val name = anime.nameCn?.takeIf { it.isNotBlank() } ?: anime.name
-                DailySummaryAnime(name, anime.coverUrl, anime.airInfo)
-            }
-
-            // 生成图片
-            val imageData = imageGeneratorService.generateDailySummaryCard(animes)
-
-            // 发送图片
             bangumiBot.sendPhoto(telegramId, imageData)
         } catch (e: Exception) {
-            log.error("生成每日汇总图片失败，降级为文字通知: {}", e.message)
-            // 降级为文字通知
-            sendDailySummaryText(telegramId, todayAnimes)
+            throw RuntimeException("发送每日汇总图片失败: telegramId=$telegramId", e)
         }
-    }
-
-    /**
-     * 发送文字版每日汇总（降级方案）
-     */
-    private fun sendDailySummaryText(telegramId: Long, todayAnimes: List<TodayAnimeInfo>) {
-        val sb = StringBuilder("今日追番更新 (${todayAnimes.size} 部):\n\n")
-        todayAnimes.forEachIndexed { index, anime ->
-            val name = anime.nameCn?.takeIf { it.isNotBlank() } ?: anime.name
-            sb.append("${index + 1}. $name\n")
-        }
-        bangumiBot.sendMessage(telegramId, sb.toString())
-    }
-
-    /**
-     * 发送通用消息
-     */
-    fun sendMessage(telegramId: Long, message: String) {
-        bangumiBot.sendMessage(telegramId, message)
     }
 }
 
@@ -247,7 +207,6 @@ data class TodayAnimeInfo(
  * 剧集信息（用于通知）
  */
 data class EpisodeInfo(
-    val epNumber: Int,      // 本季集数（显示用）
-    val sortNumber: Int,    // 全局集数（比较用）
+    val epNumber: Int,      // 集数（使用 API 的 sort 字段，全局集数）
     val name: String?       // 剧集名称
 )

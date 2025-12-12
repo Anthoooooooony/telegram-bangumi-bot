@@ -14,8 +14,8 @@ import java.time.Duration
  */
 @Service
 class RateLimiterService(
-    @Value("\${rate-limiter.burst:4}") private val burst: Long,
-    @Value("\${rate-limiter.restore-interval-seconds:2}") private val restoreIntervalSeconds: Long
+    @param:Value("\${rate-limiter.burst:4}") private val burst: Long,
+    @param:Value("\${rate-limiter.restore-interval-seconds:2}") private val restoreIntervalSeconds: Long
 ) {
     private val log = LoggerFactory.getLogger(RateLimiterService::class.java)
 

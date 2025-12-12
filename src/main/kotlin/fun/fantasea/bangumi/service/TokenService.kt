@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec
  */
 @Service
 class TokenService(
-    @Value("\${encryption.key}") private val encryptionKey: String
+    @param:Value("\${encryption.key}") private val encryptionKey: String
 ) {
     companion object {
         private const val ALGORITHM = "AES/GCM/NoPadding"

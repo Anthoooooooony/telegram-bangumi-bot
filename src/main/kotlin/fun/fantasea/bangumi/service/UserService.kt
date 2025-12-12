@@ -75,7 +75,6 @@ class UserService(
      */
     fun unbindToken(telegramId: Long): Boolean {
         val user = userRepository.findByTelegramId(telegramId) ?: return false
-
         user.bangumiToken = null
         user.bangumiUserId = null
         user.bangumiUsername = null

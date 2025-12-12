@@ -4,15 +4,16 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import kotlinx.coroutines.runBlocking
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.engine.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
-import io.ktor.serialization.jackson.*
-import io.ktor.client.engine.*
 import io.ktor.http.*
+import io.ktor.serialization.jackson.*
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -27,8 +28,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Component
 class BangumiDataClient(
-    @Value("\${telegram.proxy.host:}") private val proxyHost: String,
-    @Value("\${telegram.proxy.port:0}") private val proxyPort: Int
+    @param:Value("\${telegram.proxy.host:}") private val proxyHost: String,
+    @param:Value("\${telegram.proxy.port:0}") private val proxyPort: Int
 ) {
     private val log = LoggerFactory.getLogger(BangumiDataClient::class.java)
 
@@ -49,7 +50,6 @@ class BangumiDataClient(
         }
     }
 
-    // 复用 ObjectMapper 实例
     private val objectMapper = jacksonObjectMapper()
 
     // 缓存：Bangumi ID -> 播放平台列表
@@ -62,7 +62,7 @@ class BangumiDataClient(
      * 启动时加载数据
      */
     @PostConstruct
-    fun init() {
+    private fun init() {
         refreshData()
     }
 
@@ -70,10 +70,10 @@ class BangumiDataClient(
      * 每天凌晨 4 点刷新数据
      */
     @Scheduled(cron = "0 0 4 * * ?")
-    fun refreshData() {
+    private fun refreshData() {
         log.info("开始加载 bangumi-data 数据...")
         try {
-            val jsonText = kotlinx.coroutines.runBlocking {
+            val jsonText = runBlocking {
                 client.get(dataUrl).body<String>()
             }
 
@@ -85,23 +85,22 @@ class BangumiDataClient(
             platformCache.clear()
             for (item in data.items) {
                 val bangumiSite = item.sites.find { it.site == "bangumi" && it.id != null }
-                if (bangumiSite != null) {
-                    val platforms = item.sites
-                        .filter { it.site != "bangumi" && it.id != null }
-                        .filter { siteMeta[it.site]?.type == "onair" } // 只保留播放平台
-                        .mapNotNull { site ->
-                            val meta = siteMeta[site.site] ?: return@mapNotNull null
-                            val siteId = site.id ?: return@mapNotNull null
-                            val url = meta.urlTemplate.replace("{{id}}", siteId)
-                            PlatformInfo(
-                                name = meta.title,
-                                url = url,
-                                regions = site.regions ?: meta.regions
-                            )
-                        }
-                    if (platforms.isNotEmpty()) {
-                        platformCache[bangumiSite.id!!] = platforms
+                if (bangumiSite == null) continue
+                val platforms = item.sites
+                    .filter { it.site != "bangumi" && it.id != null }
+                    .filter { siteMeta[it.site]?.type == "onair" } // 只保留播放平台
+                    .mapNotNull { site ->
+                        val meta = siteMeta[site.site] ?: return@mapNotNull null
+                        val siteId = site.id ?: return@mapNotNull null
+                        val url = meta.urlTemplate.replace("{{id}}", siteId)
+                        PlatformInfo(
+                            name = meta.title,
+                            url = url,
+                            regions = site.regions ?: meta.regions
+                        )
                     }
+                if (platforms.isNotEmpty()) {
+                    platformCache[bangumiSite.id!!] = platforms
                 }
             }
 
@@ -116,28 +115,6 @@ class BangumiDataClient(
      */
     fun getPlatforms(subjectId: Int): List<PlatformInfo> {
         return platformCache[subjectId.toString()] ?: emptyList()
-    }
-
-    /**
-     * 生成播放平台的 Markdown 链接
-     * 格式：[平台A](url) | [平台B](url) | [平台C](url)
-     */
-    fun generatePlatformLinks(subjectId: Int, region: String? = "CN"): String? {
-        val platforms = getPlatforms(subjectId)
-        if (platforms.isEmpty()) return null
-
-        // 过滤区域（如果指定）并限制数量
-        val filtered = if (region != null) {
-            platforms.filter { it.regions == null || it.regions.contains(region) }
-        } else {
-            platforms
-        }.take(5) // 最多显示 5 个平台
-
-        if (filtered.isEmpty()) return null
-
-        return filtered.joinToString(" | ") { platform ->
-            "[${platform.name}](${platform.url})"
-        }
     }
 }
 
@@ -169,7 +146,7 @@ data class SiteMeta(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class BangumiDataItem(
     val title: String,
-    @JsonProperty("titleTranslate") val titleTranslate: Map<String, List<String>>? = null,
+    @field:JsonProperty("titleTranslate") val titleTranslate: Map<String, List<String>>? = null,
     val type: String? = null,
     val sites: List<BangumiDataSite> = emptyList()
 )

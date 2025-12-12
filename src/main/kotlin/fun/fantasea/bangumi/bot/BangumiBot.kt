@@ -1,5 +1,6 @@
 package `fun`.fantasea.bangumi.bot
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.service.BangumiCacheService
 import `fun`.fantasea.bangumi.service.ImageGeneratorService
@@ -8,8 +9,12 @@ import `fun`.fantasea.bangumi.service.SubscriptionAnime
 import `fun`.fantasea.bangumi.service.SubscriptionService
 import `fun`.fantasea.bangumi.service.UserService
 import jakarta.annotation.PostConstruct
+import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -22,6 +27,7 @@ import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.InputFile
 import java.io.ByteArrayInputStream
@@ -36,9 +42,9 @@ import java.util.concurrent.TimeUnit
 
 @Component
 class BangumiBot(
-    @Value("\${telegram.bot.token}") private val botToken: String,
-    @Value("\${telegram.proxy.host:}") private val proxyHost: String,
-    @Value("\${telegram.proxy.port:0}") private val proxyPort: Int,
+    @param:Value("\${telegram.bot.token}") private val botToken: String,
+    @param:Value("\${telegram.proxy.host:}") private val proxyHost: String,
+    @param:Value("\${telegram.proxy.port:0}") private val proxyPort: Int,
     private val userService: UserService,
     private val subscriptionService: SubscriptionService,
     private val imageGeneratorService: ImageGeneratorService,
@@ -46,6 +52,10 @@ class BangumiBot(
     private val bangumiCacheService: BangumiCacheService,
     private val rateLimiterService: RateLimiterService
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
+
+    companion object {
+        private val objectMapper = jacksonObjectMapper()
+    }
 
     private val log = LoggerFactory.getLogger(BangumiBot::class.java)
     private val telegramClient: TelegramClient = createTelegramClient()
@@ -94,31 +104,45 @@ class BangumiBot(
         }
     }
 
+    @PreDestroy
+    fun cleanup() {
+        scope.cancel()
+    }
+
     override fun consume(update: Update) {
-        if (update.hasMessage() && update.message.hasText()) {
-            val chatId = update.message.chatId
-            val userId = update.message.from.id
-            val text = update.message.text
-            val username = update.message.from.userName ?: update.message.from.firstName
+        if (!update.hasMessage() || !update.message.hasText()) return
 
-            log.info("收到消息 from {} ({}): {}", username, userId, text)
+        val chatId = update.message.chatId
+        val from = update.message.from ?: return
+        val userId = from.id
+        val text = update.message.text
+        val username = from.userName ?: from.firstName
 
-            // 速率限制检查
-            if (!rateLimiterService.tryAcquire(userId)) {
-                sendMessage(chatId, "请求太频繁，请稍后再试。")
-                return
-            }
+        log.info("收到消息 from {} ({}): {}", username, userId, text)
 
-            // 确保用户存在
-            userService.getOrCreateUser(userId, username)
+        // 速率限制检查
+        if (!rateLimiterService.tryAcquire(userId)) {
+            sendMessage(chatId, "请求太频繁，请稍后再试。")
+            return
+        }
 
-            when {
-                text.startsWith("/start") -> handleStart(chatId, username)
-                text.startsWith("/bindtoken") -> handleBindToken(chatId, userId, text)
-                text.startsWith("/unbind") -> handleUnbind(chatId, userId)
-                text.startsWith("/list") -> handleList(chatId, userId)
-                text.startsWith("/status") -> handleStatus(chatId, userId)
-                else -> handleUnknown(chatId)
+        // 确保用户存在
+        userService.getOrCreateUser(userId, username)
+
+        scope.launch {
+            try {
+                when {
+                    text.startsWith("/start") -> handleStart(chatId, username)
+                    text.startsWith("/bindtoken") -> handleBindToken(chatId, userId, text)
+                    text.startsWith("/unbind") -> handleUnbind(chatId, userId)
+                    text.startsWith("/list") -> handleList(chatId, userId)
+                    text.startsWith("/status") -> handleStatus(chatId, userId)
+                    else -> handleUnknown(chatId)
+                }
+            } catch (e: Exception) {
+                val updateJson = objectMapper.writeValueAsString(update)
+                log.error("处理消息失败: {}", updateJson, e)
+                sendMessage(chatId, "处理请求时出错，请稍后重试。")
             }
         }
     }
@@ -139,7 +163,7 @@ class BangumiBot(
         sendMessage(chatId, message)
     }
 
-    private fun handleBindToken(chatId: Long, userId: Long, text: String) {
+    private suspend fun handleBindToken(chatId: Long, userId: Long, text: String) {
         val parts = text.split(" ", limit = 2)
         if (parts.size < 2 || parts[1].isBlank()) {
             sendMessage(chatId, "请提供 Token。\n用法: /bindtoken <your_token>\n\n获取 Token: https://next.bgm.tv/demo/access-token")
@@ -149,42 +173,29 @@ class BangumiBot(
         val token = parts[1].trim()
         val messageId = sendMessageAndGetId(chatId, "正在验证 Token...")
 
-        scope.launch {
-            val result = userService.bindToken(userId, token)
-            if (result.success) {
-                editMessage(chatId, messageId, """
-                    绑定成功！
-                    Bangumi 用户: ${result.bangumiUsername}
-                    昵称: ${result.bangumiNickname}
-
-                    正在同步追番列表...
-                """.trimIndent())
-
-                // 自动同步追番列表
-                val syncResult = subscriptionService.syncSubscriptions(userId)
-                if (syncResult.success) {
-                    editMessage(chatId, messageId, """
-                        绑定成功！
-                        Bangumi 用户: ${result.bangumiUsername}
-                        昵称: ${result.bangumiNickname}
-
-                        同步完成！共 ${syncResult.syncedCount} 部在看。
-                        使用 /list 查看追番列表。
-                    """.trimIndent())
-                } else {
-                    editMessage(chatId, messageId, """
-                        绑定成功！
-                        Bangumi 用户: ${result.bangumiUsername}
-                        昵称: ${result.bangumiNickname}
-
-                        同步失败: ${syncResult.error}
-                        请稍后手动重试。
-                    """.trimIndent())
-                }
-            } else {
-                editMessage(chatId, messageId, "绑定失败: ${result.error}")
-            }
+        val result = userService.bindToken(userId, token)
+        if (!result.success) {
+            editMessage(chatId, messageId, "绑定失败: ${result.error}")
+            return
         }
+
+        val msg = DynamicMessage(chatId, messageId, ::editMessage)
+            .section("header", """
+                绑定成功！
+                Bangumi 用户: ${result.bangumiUsername}
+                昵称: ${result.bangumiNickname}
+            """.trimIndent())
+            .section("status", "正在同步追番列表...")
+            .update()
+
+        // 自动同步追番列表
+        val syncResult = subscriptionService.syncSubscriptions(userId)
+        val statusText = if (syncResult.success) {
+            "同步完成！共 ${syncResult.syncedCount} 部在看。\n使用 /list 查看追番列表。"
+        } else {
+            "同步失败: ${syncResult.error}\n请稍后手动重试。"
+        }
+        msg.section("status", statusText).update()
     }
 
     private fun handleUnbind(chatId: Long, userId: Long) {
@@ -196,7 +207,7 @@ class BangumiBot(
         }
     }
 
-    private fun handleList(chatId: Long, userId: Long) {
+    private suspend fun handleList(chatId: Long, userId: Long) {
         val subscriptions = subscriptionService.getUserSubscriptions(userId)
 
         if (subscriptions.isEmpty()) {
@@ -206,40 +217,33 @@ class BangumiBot(
 
         val messageId = sendMessageAndGetId(chatId, "正在生成追番列表...")
 
-        scope.launch {
-            try {
-                val today = LocalDate.now()
-                // 获取每个订阅的封面图和当前已播出集数（使用缓存）
-                val animes = subscriptions.map { sub ->
-                    val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
-                    var coverUrl: String? = null
-                    var latestAiredEp: Int? = null
+        val today = LocalDate.now()
+        // 并发获取每个订阅的封面图和当前已播出集数（使用缓存）
+        val animes = subscriptions.map { sub ->
+            scope.async {
+                val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
+                try {
+                    // 优先从缓存获取番剧详情
+                    val subject = bangumiCacheService.getSubject(sub.subjectId)
+                        ?: bangumiClient.getSubject(sub.subjectId).also {
+                            bangumiCacheService.putSubject(sub.subjectId, it)
+                        }
+                    val coverUrl = subject.images?.common
 
-                    try {
-                        // 优先从缓存获取番剧详情
-                        val subject = bangumiCacheService.getSubject(sub.subjectId)
-                            ?: bangumiClient.getSubject(sub.subjectId).also {
-                                bangumiCacheService.putSubject(sub.subjectId, it)
-                            }
-                        coverUrl = subject.images?.common
-
-                        // 优先从缓存获取剧集列表
-                        val episodes = bangumiCacheService.getEpisodes(sub.subjectId)
-                            ?: bangumiClient.getEpisodes(sub.subjectId).also {
-                                bangumiCacheService.putEpisodes(sub.subjectId, it)
-                            }
-                        latestAiredEp = episodes.data
-                            .filter { it.type == 0 }
-                            .filter { ep ->
-                                val airdate = ep.airdate ?: return@filter false
-                                try {
-                                    !LocalDate.parse(airdate).isAfter(today)
-                                } catch (e: Exception) { false }
-                            }
-                            .maxOfOrNull { it.ep?.toInt() ?: it.sort.toInt() }
-                    } catch (e: Exception) {
-                        log.debug("获取番剧信息失败: subjectId={}", sub.subjectId)
-                    }
+                    // 优先从缓存获取剧集列表
+                    val episodes = bangumiCacheService.getEpisodes(sub.subjectId)
+                        ?: bangumiClient.getEpisodes(sub.subjectId).also {
+                            bangumiCacheService.putEpisodes(sub.subjectId, it)
+                        }
+                    val latestAiredEp = episodes.data
+                        .filter { it.type == 0 }
+                        .filter { ep ->
+                            val airdate = ep.airdate ?: return@filter false
+                            try {
+                                !LocalDate.parse(airdate).isAfter(today)
+                            } catch (e: Exception) { false }
+                        }
+                        .maxOfOrNull { it.sort.toInt() }
 
                     SubscriptionAnime(
                         name = name,
@@ -247,23 +251,16 @@ class BangumiBot(
                         totalEpisodes = sub.totalEpisodes,
                         latestAiredEp = latestAiredEp
                     )
+                } catch (e: Exception) {
+                    log.warn("获取番剧信息失败: subjectId=${sub.subjectId}", e)
+                    null
                 }
-
-                val imageData = imageGeneratorService.generateSubscriptionListCard(animes)
-                deleteMessage(chatId, messageId)
-                sendPhoto(chatId, imageData)
-            } catch (e: Exception) {
-                log.error("生成追番列表图片失败: {}", e.message, e)
-                // 降级为文本输出
-                val sb = StringBuilder("追番列表 (${subscriptions.size} 部):\n\n")
-                subscriptions.forEachIndexed { index, sub ->
-                    val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
-                    val eps = sub.totalEpisodes?.let { " (${it}集)" } ?: ""
-                    sb.append("${index + 1}. $name$eps\n")
-                }
-                editMessage(chatId, messageId, sb.toString())
             }
-        }
+        }.awaitAll().filterNotNull()
+
+        val imageData = imageGeneratorService.generateSubscriptionListCard(animes)
+        deleteMessage(chatId, messageId)
+        sendPhoto(chatId, imageData)
     }
 
     private fun handleStatus(chatId: Long, userId: Long) {
@@ -314,27 +311,17 @@ class BangumiBot(
      * 发送消息并返回消息 ID，用于后续编辑
      */
     private fun sendMessageAndGetId(chatId: Long, text: String): Int {
-        return try {
-            val message = SendMessage.builder()
-                .chatId(chatId)
-                .text(text)
-                .build()
-            telegramClient.execute(message).messageId
-        } catch (e: Exception) {
-            log.error("发送消息失败: {}", e.message, e)
-            -1
-        }
+        val message = SendMessage.builder()
+            .chatId(chatId)
+            .text(text)
+            .build()
+        return telegramClient.execute(message).messageId
     }
 
     /**
-     * 编辑已发送的消息
+     * 编辑已发送的文本消息
      */
     private fun editMessage(chatId: Long, messageId: Int, text: String) {
-        if (messageId < 0) {
-            // 消息发送失败，改为发送新消息
-            sendMessage(chatId, text)
-            return
-        }
         try {
             val edit = EditMessageText.builder()
                 .chatId(chatId)
@@ -344,6 +331,22 @@ class BangumiBot(
             telegramClient.execute(edit)
         } catch (e: Exception) {
             log.error("编辑消息失败: {}", e.message, e)
+        }
+    }
+
+    /**
+     * 编辑已发送的媒体消息的 caption
+     */
+    private fun editCaption(chatId: Long, messageId: Int, caption: String) {
+        try {
+            val edit = EditMessageCaption.builder()
+                .chatId(chatId)
+                .messageId(messageId)
+                .caption(caption)
+                .build()
+            telegramClient.execute(edit)
+        } catch (e: Exception) {
+            log.error("编辑 caption 失败: {}", e.message, e)
         }
     }
 

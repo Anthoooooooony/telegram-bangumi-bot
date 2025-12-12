@@ -3,12 +3,15 @@ package `fun`.fantasea.bangumi.client
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 
 /**
  * Bangumi API 连接测试
  * 调用公开 API 验证连接正常
+ * 注意：此测试依赖外部网络，仅用于手动验证
  */
+@Disabled("集成测试，依赖外部网络，仅手动运行")
 class BangumiClientTest {
 
     private val client = BangumiClient(

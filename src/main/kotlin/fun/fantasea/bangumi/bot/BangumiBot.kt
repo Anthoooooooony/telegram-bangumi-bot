@@ -2,6 +2,7 @@ package `fun`.fantasea.bangumi.bot
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import `fun`.fantasea.bangumi.client.BangumiClient
+import `fun`.fantasea.bangumi.entity.Subscription
 import `fun`.fantasea.bangumi.service.BangumiCacheService
 import `fun`.fantasea.bangumi.service.ImageGeneratorService
 import `fun`.fantasea.bangumi.service.RateLimiterService
@@ -230,7 +231,14 @@ class BangumiBot(
 
         val today = LocalDate.now(zoneId)
         // 并发获取每个订阅的封面图和当前已播出集数（使用缓存）
-        val animes = subscriptions.map { sub ->
+        // 按开播时间降序 -> 停播时间降序 -> 名称升序排序
+        val animes = subscriptions
+            .sortedWith(
+                compareByDescending<Subscription> { it.anime?.beginTime }
+                    .thenByDescending { it.anime?.endTime }
+                    .thenBy { it.subjectNameCn ?: it.subjectName }
+            )
+            .map { sub ->
             scope.async {
                 val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
                 try {

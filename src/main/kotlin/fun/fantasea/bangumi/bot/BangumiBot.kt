@@ -51,6 +51,10 @@ class BangumiBot(
     private val rateLimiterService: RateLimiterService
 ) : SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 
+    companion object {
+        private val objectMapper = jacksonObjectMapper()
+    }
+
     private val log = LoggerFactory.getLogger(BangumiBot::class.java)
     private val telegramClient: TelegramClient = createTelegramClient()
 
@@ -134,7 +138,7 @@ class BangumiBot(
                     else -> handleUnknown(chatId)
                 }
             } catch (e: Exception) {
-                val updateJson = jacksonObjectMapper().writeValueAsString(update)
+                val updateJson = objectMapper.writeValueAsString(update)
                 log.error("处理消息失败: {}", updateJson, e)
                 sendMessage(chatId, "处理请求时出错，请稍后重试。")
             }

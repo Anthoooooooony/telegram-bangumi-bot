@@ -115,7 +115,7 @@ class EpisodeCheckerTask(
             val episodeDate = LocalDate.parse(airdate)
             !episodeDate.isAfter(today)
         } catch (e: Exception) {
-            // todo 添加 log
+            log.debug("解析播出日期失败: airdate={}, error={}", airdate, e.message)
             false
         }
     }

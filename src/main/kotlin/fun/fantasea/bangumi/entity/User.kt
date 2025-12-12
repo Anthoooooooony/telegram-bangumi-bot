@@ -1,7 +1,6 @@
 package `fun`.fantasea.bangumi.entity
 
 import jakarta.persistence.*
-import java.time.LocalDateTime
 import java.time.LocalTime
 
 @Entity
@@ -30,11 +29,5 @@ class User(
     var dailySummaryEnabled: Boolean = true,
 
     @Column(name = "daily_summary_time")
-    var dailySummaryTime: LocalTime = LocalTime.of(10, 0),
-
-    @Column(name = "created_at")
-    var createdAt: LocalDateTime = LocalDateTime.now(),
-
-    @Column(name = "updated_at")
-    var updatedAt: LocalDateTime = LocalDateTime.now()
-)
+    var dailySummaryTime: LocalTime = LocalTime.of(10, 0)
+) : TimestampedEntity()

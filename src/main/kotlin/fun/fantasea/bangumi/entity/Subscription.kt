@@ -1,7 +1,6 @@
 package `fun`.fantasea.bangumi.entity
 
 import jakarta.persistence.*
-import java.time.LocalDateTime
 
 /**
  * 订阅记录
@@ -47,13 +46,5 @@ class Subscription(
 
     // 最后通知的集数
     @Column(name = "last_notified_ep")
-    var lastNotifiedEp: Int = 0,
-
-    // 创建时间
-    @Column(name = "created_at")
-    var createdAt: LocalDateTime = LocalDateTime.now(),
-
-    // 更新时间
-    @Column(name = "updated_at")
-    var updatedAt: LocalDateTime = LocalDateTime.now()
-)
+    var lastNotifiedEp: Int = 0
+) : TimestampedEntity()

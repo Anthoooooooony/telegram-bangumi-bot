@@ -79,7 +79,7 @@ class NotificationService(
                 platforms = platforms
             )
         } catch (e: Exception) {
-            throw RuntimeException("生成通知图片失败: subjectId=${subscription.subjectId}", e) // todo 用一个项目自定义的exception，包含属性 userErrorMessage 来指定给用户报错的信息内容
+            throw RuntimeException("生成通知图片失败: subjectId=${subscription.subjectId}", e)
         }
 
         // 生成播放链接作为图片 caption

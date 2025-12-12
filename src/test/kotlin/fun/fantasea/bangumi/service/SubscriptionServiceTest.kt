@@ -82,12 +82,13 @@ class SubscriptionServiceTest {
         every { userRepository.findByTelegramId(123456789L) } returns testUser
         every { userService.getDecryptedToken(123456789L) } returns token
         coEvery { bangumiClient.getUserCollections("bgmuser", token) } returns collectionResponse
+        every { animeRepository.findAllById(any<Iterable<Int>>()) } returns emptyList()
         coEvery { bangumiClient.getEpisodes(any(), any()) } returns EpisodeResponse(
             total = 0,
             data = emptyList()
         )
-        coEvery { animeService.getOrCreateAnime(100) } returns animeA
-        coEvery { animeService.getOrCreateAnime(200) } returns animeB
+        coEvery { animeService.createAnime(100) } returns animeA
+        coEvery { animeService.createAnime(200) } returns animeB
         every { animeService.isEpisodeAired(any(), any(), any()) } returns false
         every { subscriptionRepository.findByUserAndSubjectId(testUser, any()) } returns null
         every { subscriptionRepository.save(any()) } answers { firstArg() }
@@ -171,7 +172,7 @@ class SubscriptionServiceTest {
         every { userRepository.findByTelegramId(123456789L) } returns testUser
         every { userService.getDecryptedToken(123456789L) } returns token
         coEvery { bangumiClient.getUserCollections("bgmuser", token) } returns collectionResponse
-        coEvery { animeService.getOrCreateAnime(100) } returns anime
+        every { animeRepository.findAllById(any<Iterable<Int>>()) } returns listOf(anime)
         every { subscriptionRepository.findByUserAndSubjectId(testUser, 100) } returns existingSubscription
         every { subscriptionRepository.save(any()) } answers { firstArg() }
 
@@ -180,6 +181,7 @@ class SubscriptionServiceTest {
 
         // then
         assertTrue(result.success)
+        coVerify(exactly = 0) { animeService.createAnime(any()) }
         verify { subscriptionRepository.save(match {
             it.subjectName == "New Name" && it.subjectNameCn == "新名称"
         }) }

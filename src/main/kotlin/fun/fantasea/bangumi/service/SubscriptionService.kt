@@ -60,22 +60,24 @@ class SubscriptionService(
 
             var syncedCount = 0
 
+            // 批量查询已存在的 Anime，减少数据库查询次数
+            val subjectIds = collections.data.mapNotNull { it.subject?.let { _ -> it.subjectId } }
+            val existingAnimeMap = animeRepository.findAllById(subjectIds).associateBy { it.subjectId }
+
             for (item in collections.data) {
                 val subject = item.subject ?: continue
 
-                // 获取或创建 Anime（整合两个数据源）
-                val anime = try {
-                    animeService.getOrCreateAnime(item.subjectId) // todo 也许可以优化？循环中查询效率低
+                // 优先使用已存在的 Anime，否则创建新的
+                val anime = existingAnimeMap[item.subjectId] ?: try {
+                    animeService.createAnime(item.subjectId)
                 } catch (e: Exception) {
                     log.warn("获取番剧 {} 信息失败: {}", item.subjectId, e.message)
-                    // 如果 AnimeService 失败，创建一个基本的 Anime 记录
-                    animeRepository.findById(item.subjectId).orElse(null)
-                        ?: animeRepository.save(Anime(
-                            subjectId = item.subjectId,
-                            name = subject.name,
-                            nameCn = subject.nameCn,
-                            totalEpisodes = subject.eps
-                        ))
+                    animeRepository.save(Anime(
+                        subjectId = item.subjectId,
+                        name = subject.name,
+                        nameCn = subject.nameCn,
+                        totalEpisodes = subject.eps
+                    ))
                 }
 
                 // 查找或创建订阅
@@ -105,7 +107,7 @@ class SubscriptionService(
                     }
                 }
 
-                subscriptionRepository.save(subscription) // todo 是否需要添加 @Transaction？
+                subscriptionRepository.save(subscription)
 
                 // 为有 BangumiData 时间信息的新订阅安排通知
                 if (isNewSubscription && anime.hasBangumiData) {

@@ -34,13 +34,11 @@ class AnimeService(
     }
 
     /**
-     * 获取或创建 Anime 记录
+     * 创建 Anime 记录
      * 整合 Bangumi API（基本信息）和 BangumiData（时间和平台信息）
+     * 调用方应先检查是否已存在
      */
-    suspend fun getOrCreateAnime(subjectId: Int): Anime {
-        // 先查本地数据库
-        animeRepository.findById(subjectId).orElse(null)?.let { return it }
-
+    suspend fun createAnime(subjectId: Int): Anime {
         // 从 Bangumi API 获取基本信息
         val subject = bangumiClient.getSubject(subjectId)
 

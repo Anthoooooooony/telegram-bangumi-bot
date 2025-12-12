@@ -15,8 +15,6 @@ import javax.imageio.ImageIO
 /**
  * 图片生成服务
  * 使用 Java2D 绘制通知卡片
- *
- * todo 有多个重复的绘制 pattern 可以合并复用
  */
 @Service
 class ImageGeneratorService(
@@ -297,14 +295,17 @@ class ImageGeneratorService(
         val displayAnimes = animes.take(maxItems)
 
         displayAnimes.forEachIndexed { index, anime ->
-            drawAnimeItem(
-                g2d,
-                anime,
-                margin,
-                y,
-                CARD_WIDTH - margin * 2,
-                itemHeight,
-                index + 1
+            drawListItem(
+                g2d = g2d,
+                x = margin,
+                y = y,
+                width = CARD_WIDTH - margin * 2,
+                height = itemHeight,
+                index = index + 1,
+                accentColor = Colors.SUMMARY_ACCENT,
+                name = anime.name,
+                coverUrl = anime.coverUrl,
+                infoText = anime.airInfo
             )
             y += itemHeight + itemGap
         }
@@ -325,42 +326,30 @@ class ImageGeneratorService(
     }
 
     /**
-     * 绘制单个番剧条目（带封面背景和渐变）
+     * 绘制单个列表条目（通用方法，带封面背景和渐变）
      */
-    private fun drawAnimeItem(g2d: Graphics2D, anime: DailySummaryAnime, x: Int, y: Int, width: Int, height: Int, index: Int) {
+    private fun drawListItem(
+        g2d: Graphics2D,
+        x: Int,
+        y: Int,
+        width: Int,
+        height: Int,
+        index: Int,
+        accentColor: Color,
+        name: String,
+        coverUrl: String?,
+        infoText: String?
+    ) {
         val originalClip = g2d.clip
-        val itemRadius = ITEM_RADIUS
 
         // 创建圆角裁剪区域
         val itemRect = RoundRectangle2D.Float(
-            x.toFloat(),
-            y.toFloat(),
-            width.toFloat(),
-            height.toFloat(),
-            itemRadius,
-            itemRadius
+            x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), ITEM_RADIUS, ITEM_RADIUS
         )
         g2d.clip = itemRect
 
-        // 尝试绘制封面背景（使用缓存）
-        var hasCover = false
-        if (!anime.coverUrl.isNullOrBlank()) {
-            try {
-                val coverImage = loadCoverImage(anime.coverUrl)
-                if (coverImage != null) {
-                    // Cover 模式：缩放填满条目区域
-                    val scale = maxOf(width.toDouble() / coverImage.width, height.toDouble() / coverImage.height)
-                    val scaledWidth = (coverImage.width * scale).toInt()
-                    val scaledHeight = (coverImage.height * scale).toInt()
-                    val drawX = x + (width - scaledWidth) / 2
-                    val drawY = y + (height - scaledHeight) / 2
-                    g2d.drawImage(coverImage, drawX, drawY, scaledWidth, scaledHeight, null)
-                    hasCover = true
-                }
-            } catch (e: Exception) {
-                log.debug("加载封面图失败: {}", e.message)
-            }
-        }
+        // 尝试绘制封面背景
+        val hasCover = drawItemCover(g2d, coverUrl, x, y, width, height)
 
         // 如果没有封面，使用纯色背景
         if (!hasCover) {
@@ -368,23 +357,24 @@ class ImageGeneratorService(
             g2d.fillRect(x, y, width, height)
         }
 
-        // 绘制渐变遮罩（从左到右）
+        // 绘制渐变遮罩
         val overlay = GradientPaint(
-            x.toFloat(), y.toFloat(), Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, 230),
-            (x + width * 0.7f), y.toFloat(), Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, if (hasCover) 100 else 180)
+            x.toFloat(), y.toFloat(),
+            Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, 230),
+            (x + width * 0.7f), y.toFloat(),
+            Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, if (hasCover) 100 else 180)
         )
         g2d.paint = overlay
         g2d.fillRect(x, y, width, height)
 
-        // 恢复裁剪区域
         g2d.clip = originalClip
 
         // 绘制左侧装饰条
-        g2d.color = Colors.SUMMARY_ACCENT
+        g2d.color = accentColor
         g2d.fillRoundRect(x, y, 4, height, 4, 4)
 
         // 绘制序号
-        g2d.color = Colors.SUMMARY_ACCENT
+        g2d.color = accentColor
         g2d.font = getFont(Font.BOLD, 14)
         g2d.drawString("$index", x + 14, y + height / 2 + 5)
 
@@ -392,17 +382,38 @@ class ImageGeneratorService(
         val textX = x + 40
         val maxTextWidth = width - 55
 
-        // 绘制番剧名（上半部分）
+        // 绘制名称
         g2d.color = Colors.TEXT_PRIMARY
         g2d.font = getFont(Font.BOLD, 16)
-        val displayName = truncateText(g2d, anime.name, maxTextWidth)
-        g2d.drawString(displayName, textX, y + 28)
+        g2d.drawString(truncateText(g2d, name, maxTextWidth), textX, y + 28)
 
-        // 绘制更新信息（下半部分）
-        if (!anime.airInfo.isNullOrBlank()) {
+        // 绘制信息文本
+        if (!infoText.isNullOrBlank()) {
             g2d.color = Colors.TEXT_MUTED
             g2d.font = getFont(Font.PLAIN, 13)
-            g2d.drawString(anime.airInfo, textX, y + 50)
+            g2d.drawString(infoText, textX, y + 50)
+        }
+    }
+
+    /**
+     * 绘制条目封面背景
+     * @return 是否成功绘制封面
+     */
+    private fun drawItemCover(g2d: Graphics2D, coverUrl: String?, x: Int, y: Int, width: Int, height: Int): Boolean {
+        if (coverUrl.isNullOrBlank()) return false
+
+        return try {
+            val coverImage = loadCoverImage(coverUrl) ?: return false
+            val scale = maxOf(width.toDouble() / coverImage.width, height.toDouble() / coverImage.height)
+            val scaledWidth = (coverImage.width * scale).toInt()
+            val scaledHeight = (coverImage.height * scale).toInt()
+            val drawX = x + (width - scaledWidth) / 2
+            val drawY = y + (height - scaledHeight) / 2
+            g2d.drawImage(coverImage, drawX, drawY, scaledWidth, scaledHeight, null)
+            true
+        } catch (e: Exception) {
+            log.debug("加载封面图失败: {}", e.message)
+            false
         }
     }
 
@@ -521,7 +532,19 @@ class ImageGeneratorService(
         val displayAnimes = animes.take(maxItems)
 
         displayAnimes.forEachIndexed { index, anime ->
-            drawSubscriptionItem(g2d, anime, margin, y, CARD_WIDTH - margin * 2, itemHeight, index + 1, listAccentColor)
+            val infoText = buildEpisodeInfo(anime.latestAiredEp, anime.totalEpisodes)
+            drawListItem(
+                g2d = g2d,
+                x = margin,
+                y = y,
+                width = CARD_WIDTH - margin * 2,
+                height = itemHeight,
+                index = index + 1,
+                accentColor = listAccentColor,
+                name = anime.name,
+                coverUrl = anime.coverUrl,
+                infoText = infoText
+            )
             y += itemHeight + itemGap
         }
 
@@ -540,82 +563,20 @@ class ImageGeneratorService(
         g2d.drawString(timeText, CARD_WIDTH - margin - timeWidth, cardHeight - 12)
     }
 
-    private fun drawSubscriptionItem(g2d: Graphics2D, anime: SubscriptionAnime, x: Int, y: Int, width: Int, height: Int, index: Int, accentColor: Color) {
-        val originalClip = g2d.clip
-        val itemRadius = ITEM_RADIUS
-
-        val itemRect = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat(), itemRadius, itemRadius)
-        g2d.clip = itemRect
-
-        // 尝试绘制封面背景（使用缓存）
-        var hasCover = false
-        if (!anime.coverUrl.isNullOrBlank()) {
-            try {
-                val coverImage = loadCoverImage(anime.coverUrl)
-                if (coverImage != null) {
-                    val scale = maxOf(width.toDouble() / coverImage.width, height.toDouble() / coverImage.height)
-                    val scaledWidth = (coverImage.width * scale).toInt()
-                    val scaledHeight = (coverImage.height * scale).toInt()
-                    val drawX = x + (width - scaledWidth) / 2
-                    val drawY = y + (height - scaledHeight) / 2
-                    g2d.drawImage(coverImage, drawX, drawY, scaledWidth, scaledHeight, null)
-                    hasCover = true
+    /**
+     * 构建集数信息文本
+     */
+    private fun buildEpisodeInfo(latestAiredEp: Int?, totalEpisodes: Int?): String? {
+        return buildString {
+            if (latestAiredEp != null && latestAiredEp > 0) {
+                append("已播出 $latestAiredEp 集")
+                if (totalEpisodes != null && totalEpisodes > 0) {
+                    append(" / 共 $totalEpisodes 集")
                 }
-            } catch (e: Exception) {
-                log.debug("加载封面图失败: {}", e.message)
+            } else if (totalEpisodes != null && totalEpisodes > 0) {
+                append("共 $totalEpisodes 集")
             }
-        }
-
-        if (!hasCover) {
-            g2d.color = Color(45, 45, 60)
-            g2d.fillRect(x, y, width, height)
-        }
-
-        // 渐变遮罩
-        val overlay = GradientPaint(
-            x.toFloat(), y.toFloat(), Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, 230),
-            (x + width * 0.7f), y.toFloat(), Color(Colors.OVERLAY_DARK.red, Colors.OVERLAY_DARK.green, Colors.OVERLAY_DARK.blue, if (hasCover) 100 else 180)
-        )
-        g2d.paint = overlay
-        g2d.fillRect(x, y, width, height)
-
-        g2d.clip = originalClip
-
-        // 左侧装饰条
-        g2d.color = accentColor
-        g2d.fillRoundRect(x, y, 4, height, 4, 4)
-
-        // 序号
-        g2d.color = accentColor
-        g2d.font = getFont(Font.BOLD, 14)
-        g2d.drawString("$index", x + 14, y + height / 2 + 5)
-
-        // 文字内容
-        val textX = x + 40
-        val maxTextWidth = width - 55
-
-        // 番剧名
-        g2d.color = Colors.TEXT_PRIMARY
-        g2d.font = getFont(Font.BOLD, 16)
-        val displayName = truncateText(g2d, anime.name, maxTextWidth)
-        g2d.drawString(displayName, textX, y + 28)
-
-        // 集数信息：已播出 / 总集数
-        g2d.color = Colors.TEXT_MUTED
-        g2d.font = getFont(Font.PLAIN, 13)
-        val epInfo = buildString {
-            if (anime.latestAiredEp != null && anime.latestAiredEp > 0) {
-                append("已播出 ${anime.latestAiredEp} 集")
-                if (anime.totalEpisodes != null && anime.totalEpisodes > 0) {
-                    append(" / 共 ${anime.totalEpisodes} 集")
-                }
-            } else if (anime.totalEpisodes != null && anime.totalEpisodes > 0) {
-                append("共 ${anime.totalEpisodes} 集")
-            }
-        }
-        if (epInfo.isNotEmpty()) {
-            g2d.drawString(epInfo, textX, y + 50)
-        }
+        }.takeIf { it.isNotEmpty() }
     }
 }
 

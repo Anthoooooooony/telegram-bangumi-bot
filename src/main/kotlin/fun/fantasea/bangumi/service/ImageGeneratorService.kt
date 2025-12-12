@@ -25,7 +25,6 @@ class ImageGeneratorService(
     companion object {
         private const val CARD_WIDTH = 400
         private const val CARD_HEIGHT = 200
-        private const val CORNER_RADIUS = 20f
 
         // 颜色定义
         private val ACCENT_COLOR = Color(255, 107, 107)        // 新剧集通知 - 红色
@@ -73,10 +72,6 @@ class ImageGeneratorService(
 
         try {
             setupRenderingHints(g2d)
-
-            // 创建圆角裁剪区域
-            val roundRect = RoundRectangle2D.Float(0f, 0f, CARD_WIDTH.toFloat(), CARD_HEIGHT.toFloat(), CORNER_RADIUS, CORNER_RADIUS)
-            g2d.clip = roundRect
 
             // 绘制背景（封面图或纯色）
             drawBackground(g2d, coverUrl)
@@ -225,10 +220,6 @@ class ImageGeneratorService(
 
         try {
             setupRenderingHints(g2d)
-
-            // 创建圆角裁剪区域
-            val roundRect = RoundRectangle2D.Float(0f, 0f, CARD_WIDTH.toFloat(), cardHeight.toFloat(), CORNER_RADIUS, CORNER_RADIUS)
-            g2d.clip = roundRect
 
             // 绘制纯色背景
             g2d.color = FALLBACK_BG
@@ -439,9 +430,6 @@ class ImageGeneratorService(
 
         try {
             setupRenderingHints(g2d)
-
-            val roundRect = RoundRectangle2D.Float(0f, 0f, CARD_WIDTH.toFloat(), cardHeight.toFloat(), CORNER_RADIUS, CORNER_RADIUS)
-            g2d.clip = roundRect
 
             g2d.color = FALLBACK_BG
             g2d.fillRect(0, 0, CARD_WIDTH, cardHeight)

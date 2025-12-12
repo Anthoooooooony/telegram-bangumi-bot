@@ -31,6 +31,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 import okhttp3.OkHttpClient
 import java.net.InetSocketAddress
 import java.net.Proxy
+import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
 @Component
@@ -207,7 +208,7 @@ class BangumiBot(
 
         scope.launch {
             try {
-                val today = java.time.LocalDate.now()
+                val today = LocalDate.now()
                 // 获取每个订阅的封面图和当前已播出集数（使用缓存）
                 val animes = subscriptions.map { sub ->
                     val name = sub.subjectNameCn?.takeIf { it.isNotBlank() } ?: sub.subjectName
@@ -232,7 +233,7 @@ class BangumiBot(
                             .filter { ep ->
                                 val airdate = ep.airdate ?: return@filter false
                                 try {
-                                    !java.time.LocalDate.parse(airdate).isAfter(today)
+                                    !LocalDate.parse(airdate).isAfter(today)
                                 } catch (e: Exception) { false }
                             }
                             .maxOfOrNull { it.ep?.toInt() ?: it.sort.toInt() }

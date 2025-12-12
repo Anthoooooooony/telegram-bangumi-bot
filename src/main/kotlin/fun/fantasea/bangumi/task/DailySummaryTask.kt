@@ -3,6 +3,7 @@ package `fun`.fantasea.bangumi.task
 import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.repository.SubscriptionRepository
 import `fun`.fantasea.bangumi.repository.UserRepository
+import `fun`.fantasea.bangumi.repository.UserSpecifications
 import `fun`.fantasea.bangumi.service.NotificationService
 import `fun`.fantasea.bangumi.service.TodayAnimeInfo
 import kotlinx.coroutines.runBlocking
@@ -45,12 +46,12 @@ class DailySummaryTask(
             sentToday.clear()
         }
 
-        // 获取所有启用每日汇总的用户
-        val users = userRepository.findAll()
-            .filter { it.dailySummaryEnabled }
-            .filter { it.bangumiToken != null }
-            .filter { it.id !in sentToday }
-            .filter { isTimeMatch(now, it.dailySummaryTime) }
+        // 获取所有启用每日汇总且满足条件的用户
+        val spec = UserSpecifications.dailySummaryEnabled()
+            .and(UserSpecifications.hasBangumiToken())
+            .and(UserSpecifications.idNotIn(sentToday))
+            .and(UserSpecifications.dailySummaryTimeMatches(now))
+        val users = userRepository.findAll(spec)
 
         if (users.isEmpty()) return
 
@@ -135,12 +136,5 @@ class DailySummaryTask(
         } else {
             log.debug("用户 {} 在 24h 窗口内无更新，跳过汇总", telegramId)
         }
-    }
-
-    /**
-     * 检查当前时间是否与设定时间匹配（精确到分钟）
-     */
-    private fun isTimeMatch(now: LocalTime, target: LocalTime): Boolean {
-        return now.hour == target.hour && now.minute == target.minute
     }
 }

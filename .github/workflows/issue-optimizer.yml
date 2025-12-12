@@ -4,9 +4,7 @@
 #
 # 功能:
 #   1. 自动标签: 根据 Issue 内容自动添加合适的标签
-#   2. 内容增强: 补充相关代码位置、上下文信息
-#   3. 重复检测: 检查是否存在类似的 Issue
-#   4. 格式验证: 确保 Issue 结构清晰、信息完整
+#   2. 重复检测: 检查是否存在类似的 Issue
 
 name: Issue Optimizer
 
@@ -39,7 +37,6 @@ jobs:
             ISSUE NUMBER: ${{ github.event.issue.number }}
             ISSUE TITLE: ${{ github.event.issue.title }}
             ISSUE BODY: ${{ github.event.issue.body }}
-            ISSUE AUTHOR: ${{ github.event.issue.user.login }}
 
             请执行以下任务:
 
@@ -58,28 +55,6 @@ jobs:
             ## 2. 重复检测
             搜索现有 Issue，检查是否存在类似问题:
             - 使用 `gh issue list --search "<keywords>" --state all` 搜索
-            - 如果发现可能的重复项，在评论中提及并添加 `duplicate` 标签
+            - 如果发现可能的重复项，添加 `duplicate` 标签，并评论说明相似的 Issue 链接
 
-            ## 3. 内容增强
-            分析 Issue 内容，如果涉及代码问题:
-            - 搜索代码库找到相关文件位置
-            - 提供可能相关的代码上下文
-            - 参考 CLAUDE.md 了解项目架构
-
-            ## 4. 格式验证
-            检查 Issue 是否包含足够信息:
-            - Bug: 是否有复现步骤、预期行为、实际行为
-            - Feature: 是否有清晰的需求描述和使用场景
-            - 如果信息不足，礼貌地请求补充
-
-            ## 输出
-            将分析结果作为一条友好的评论发布到 Issue:
-            - 使用 `gh issue comment <number> --body "<comment>"`
-            - 评论应简洁、有帮助、使用中文
-            - 如果发现重复 Issue，说明相似点和链接
-            - 如果找到相关代码，提供文件路径和简要说明
-            - 如果需要更多信息，具体说明需要什么
-
-            注意: 保持友好和专业的语气，目标是帮助作者和维护者更高效地处理 Issue。
-
-          claude_args: '--allowed-tools "Bash(gh issue:*),Bash(gh search:*),Read,Glob,Grep"'
+          claude_args: '--allowed-tools "Bash(gh issue:*),Bash(gh search:*)"'

@@ -14,6 +14,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.transaction.support.TransactionCallback
+import org.springframework.transaction.support.TransactionTemplate
 import java.util.*
 
 /**
@@ -42,6 +44,9 @@ class SubscriptionServiceTest {
     @MockK
     lateinit var scheduledNotificationService: ScheduledNotificationService
 
+    @MockK
+    lateinit var transactionTemplate: TransactionTemplate
+
     @InjectMockKs
     lateinit var subscriptionService: SubscriptionService
 
@@ -57,6 +62,11 @@ class SubscriptionServiceTest {
     @BeforeEach
     fun setUp() {
         MockKAnnotations.init(this)
+        // TransactionTemplate 直接执行传入的回调
+        every { transactionTemplate.execute(any<TransactionCallback<*>>()) } answers {
+            val callback = firstArg<TransactionCallback<*>>()
+            callback.doInTransaction(mockk(relaxed = true))
+        }
     }
 
     @Test

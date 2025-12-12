@@ -1,12 +1,16 @@
 package `fun`.fantasea.bangumi.service
 
 import `fun`.fantasea.bangumi.client.BangumiClient
+import `fun`.fantasea.bangumi.entity.Anime
 import `fun`.fantasea.bangumi.entity.Subscription
+import `fun`.fantasea.bangumi.repository.AnimeRepository
 import `fun`.fantasea.bangumi.repository.SubscriptionRepository
 import `fun`.fantasea.bangumi.repository.UserRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
-import java.time.LocalDate
+import org.springframework.transaction.support.TransactionTemplate
+import java.time.Instant
 import java.time.LocalDateTime
 
 /**
@@ -17,8 +21,12 @@ import java.time.LocalDateTime
 class SubscriptionService(
     private val subscriptionRepository: SubscriptionRepository,
     private val userRepository: UserRepository,
+    private val animeRepository: AnimeRepository,
     private val bangumiClient: BangumiClient,
-    private val userService: UserService
+    private val userService: UserService,
+    private val transactionTemplate: TransactionTemplate,
+    @param:Lazy private val animeService: AnimeService,
+    @param:Lazy private val scheduledNotificationService: ScheduledNotificationService
 ) {
     private val log = LoggerFactory.getLogger(SubscriptionService::class.java)
 
@@ -54,8 +62,25 @@ class SubscriptionService(
 
             var syncedCount = 0
 
+            // 批量查询已存在的 Anime，减少数据库查询次数
+            val subjectIds = collections.data.mapNotNull { it.subject?.let { _ -> it.subjectId } }
+            val existingAnimeMap = animeRepository.findAllById(subjectIds).associateBy { it.subjectId }
+
             for (item in collections.data) {
                 val subject = item.subject ?: continue
+
+                // 优先使用已存在的 Anime，否则创建新的
+                val anime = existingAnimeMap[item.subjectId] ?: try {
+                    animeService.createAnime(item.subjectId)
+                } catch (e: Exception) {
+                    log.warn("获取番剧 {} 信息失败: {}", item.subjectId, e.message)
+                    animeRepository.save(Anime(
+                        subjectId = item.subjectId,
+                        name = subject.name,
+                        nameCn = subject.nameCn,
+                        totalEpisodes = subject.eps
+                    ))
+                }
 
                 // 查找或创建订阅
                 val existingSubscription = subscriptionRepository.findByUserAndSubjectId(user, item.subjectId)
@@ -63,7 +88,10 @@ class SubscriptionService(
                 val subscription = existingSubscription
                     ?: Subscription(user = user, subjectId = item.subjectId, subjectName = subject.name)
 
-                // 更新信息
+                // 关联 Anime
+                subscription.anime = anime
+
+                // 更新信息（保留旧字段用于兼容）
                 subscription.subjectName = subject.name
                 subscription.subjectNameCn = subject.nameCn
                 subscription.totalEpisodes = subject.eps
@@ -72,7 +100,7 @@ class SubscriptionService(
                 // 新订阅时，初始化 lastNotifiedEp 为当前已播出的最新集数，避免推送历史剧集
                 if (isNewSubscription) {
                     try {
-                        val latestAiredEp = getLatestAiredEpisode(item.subjectId)
+                        val latestAiredEp = getLatestAiredEpisode(anime)
                         subscription.lastNotifiedEp = latestAiredEp
                         subscription.latestAiredEp = latestAiredEp
                         log.debug("新订阅 {} 初始化 lastNotifiedEp 为 {}", subject.name, latestAiredEp)
@@ -81,7 +109,16 @@ class SubscriptionService(
                     }
                 }
 
-                subscriptionRepository.save(subscription)
+                // 使用事务确保保存订阅和调度通知的原子性
+                transactionTemplate.execute {
+                    subscriptionRepository.save(subscription)
+
+                    // 为有 BangumiData 时间信息的新订阅安排通知
+                    if (isNewSubscription && anime.hasBangumiData) {
+                        scheduledNotificationService.scheduleNextNotification(subscription)
+                    }
+                }
+
                 syncedCount++
             }
 
@@ -132,22 +169,15 @@ class SubscriptionService(
 
     /**
      * 获取番剧当前已播出的最新集数
+     * 使用 AnimeService 进行精确时间判断
      */
-    private suspend fun getLatestAiredEpisode(subjectId: Int): Int {
-        val episodes = bangumiClient.getEpisodes(subjectId)
-        val today = LocalDate.now()
+    private suspend fun getLatestAiredEpisode(anime: Anime): Int {
+        val episodes = bangumiClient.getEpisodes(anime.subjectId)
+        val now = Instant.now()
 
         return episodes.data
             .filter { it.type == 0 } // 本篇
-            .filter { ep ->
-                val airdate = ep.airdate ?: return@filter false
-                try {
-                    val episodeDate = LocalDate.parse(airdate)
-                    !episodeDate.isAfter(today)
-                } catch (e: Exception) {
-                    false
-                }
-            }
+            .filter { animeService.isEpisodeAired(anime, it, now) }
             .maxOfOrNull { it.sort.toInt() } ?: 0
     }
 }

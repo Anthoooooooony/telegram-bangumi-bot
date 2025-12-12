@@ -68,15 +68,30 @@ docker-compose logs -f app
 
 ## 关键实现细节
 
+**数据源整合**:
+项目使用两个数据源，通过 `AnimeService` 整合：
+
+| 数据源 | 来源 | 提供内容 |
+|--------|------|---------|
+| Bangumi API | `api.bgm.tv` | 番剧名称、封面、剧集列表、播出日期 (仅日期) |
+| BangumiData | `cdn.jsdelivr.net` | 播放平台链接、精确播出时间 (含时分) |
+
+`Anime` 实体存储整合后的番剧信息，`Subscription` 通过外键关联。
+
+**播出时间判断**:
+- 优先使用 BangumiData 的 `begin` + `broadcast` 计算精确播出时间
+- 回退到 Bangumi API 的 `Episode.airdate` (仅日期)
+- `AnimeService.isEpisodeAired()` 统一处理两种情况
+
 **剧集编号**:
 - `Episode.sort`: 全局集数 (跨季累计，用于存储和比较)
-- `Episode.ep`: 本季集数 (显示给用户)
+- `Episode.ep`: 本季集数 (仅 API 兼容，项目中不使用)
 
 **新订阅处理**:
 `SubscriptionService` 初始化新订阅时，将 `lastNotifiedEp` 设为当前最新已播集数，避免推送历史剧集
 
 **播放平台链接**:
-`BangumiDataClient` 从 bangumi-data (jsdelivr CDN) 获取流媒体平台数据，通知消息使用 MarkdownV2 格式，特殊字符需转义
+`BangumiDataClient` 从 bangumi-data (jsdelivr CDN) 获取流媒体平台数据和时间信息，通知消息使用 MarkdownV2 格式，特殊字符需转义
 
 **资源缓存**:
 `BangumiCacheService` 提供内存缓存，减少 API 调用和图片下载：

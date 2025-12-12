@@ -3,7 +3,12 @@ package `fun`.fantasea.bangumi.service
 import `fun`.fantasea.bangumi.entity.Anime
 import `fun`.fantasea.bangumi.entity.Subscription
 import `fun`.fantasea.bangumi.repository.SubscriptionRepository
-import kotlinx.coroutines.runBlocking
+import jakarta.annotation.PreDestroy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Lazy
 import org.springframework.scheduling.TaskScheduler
@@ -27,6 +32,17 @@ class ScheduledNotificationService(
 
     // 存储订阅 ID -> ScheduledFuture 的映射，用于取消任务
     private val scheduledTasks = ConcurrentHashMap<Long, ScheduledFuture<*>>()
+
+    // 使用 SupervisorJob 防止单个任务失败影响其他任务
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @PreDestroy
+    fun shutdown() {
+        log.info("关闭通知调度服务，取消 {} 个待执行任务", scheduledTasks.size)
+        scope.cancel()
+        scheduledTasks.values.forEach { it.cancel(false) }
+        scheduledTasks.clear()
+    }
 
     /**
      * 为订阅安排下一集的通知
@@ -132,9 +148,18 @@ class ScheduledNotificationService(
     }
 
     /**
-     * 执行通知
+     * 执行通知（在协程中异步执行，不阻塞调度线程池）
      */
     private fun executeNotification(subscriptionId: Long) {
+        scope.launch {
+            executeNotificationAsync(subscriptionId)
+        }
+    }
+
+    /**
+     * 异步执行通知逻辑
+     */
+    private suspend fun executeNotificationAsync(subscriptionId: Long) {
         var subjectId: Int? = null
         var animeName: String? = null
 
@@ -157,28 +182,27 @@ class ScheduledNotificationService(
             animeName = animeService.getDisplayName(anime)
             val nextEp = subscription.nextNotifyEp ?: return
 
-            // 发送通知
-            runBlocking {
-                try {
-                    notificationService.sendNewEpisodeNotification( // todo 改为一次性向所有 user 发送 而不是一个一个来
-                        telegramId = subscription.user.telegramId,
-                        subscription = subscription,
-                        episodes = listOf(EpisodeInfo(
-                            epNumber = nextEp,
-                            name = null,
-                            airTimeDisplay = animeService.formatAirTime(anime, nextEp)
-                        ))
-                    )
+            // 发送通知 - 失败则不更新数据库，保持任务状态
+            try {
+                notificationService.sendNewEpisodeNotification(
+                    telegramId = subscription.user.telegramId,
+                    subscription = subscription,
+                    episodes = listOf(EpisodeInfo(
+                        epNumber = nextEp,
+                        name = null,
+                        airTimeDisplay = animeService.formatAirTime(anime, nextEp)
+                    ))
+                )
 
-                    log.info("已发送通知: {} 第{}集 (用户 {}, subjectId={})",
-                        animeName, nextEp, subscription.user.telegramId, subjectId)
-                } catch (e: Exception) {
-                    log.error("发送通知失败: subscriptionId={}, subjectId={}, anime={}, error={}",
-                        subscriptionId, subjectId, animeName, e.message, e)
-                }
+                log.info("已发送通知: {} 第{}集 (用户 {}, subjectId={})",
+                    animeName, nextEp, subscription.user.telegramId, subjectId)
+            } catch (e: Exception) {
+                log.error("发送通知失败，保持任务状态等待重试: subscriptionId={}, subjectId={}, anime={}, error={}",
+                    subscriptionId, subjectId, animeName, e.message, e)
+                return
             }
 
-            // 更新已通知集数
+            // 通知成功后更新数据库
             subscription.lastNotifiedEp = nextEp
             subscription.latestAiredEp = nextEp
 

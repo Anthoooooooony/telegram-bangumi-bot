@@ -1,5 +1,6 @@
 package `fun`.fantasea.bangumi.bot
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.service.BangumiCacheService
 import `fun`.fantasea.bangumi.service.ImageGeneratorService
@@ -95,12 +96,14 @@ class BangumiBot(
     }
 
     override fun consume(update: Update) {
-        if (update.hasMessage() && update.message.hasText()) {
-            val chatId = update.message.chatId
-            val userId = update.message.from.id
-            val text = update.message.text
-            val username = update.message.from.userName ?: update.message.from.firstName
+        if (!update.hasMessage() || !update.message.hasText()) return
 
+        val chatId = update.message.chatId
+        val userId = update.message.from.id
+        val text = update.message.text
+        val username = update.message.from.userName ?: update.message.from.firstName
+
+        try {
             log.info("收到消息 from {} ({}): {}", username, userId, text)
 
             // 速率限制检查
@@ -120,6 +123,9 @@ class BangumiBot(
                 text.startsWith("/status") -> handleStatus(chatId, userId)
                 else -> handleUnknown(chatId)
             }
+        } catch (e: Exception) {
+            val updateJson = jacksonObjectMapper().writeValueAsString(update)
+            log.error("处理消息失败: {}", updateJson, e)
         }
     }
 
@@ -314,27 +320,17 @@ class BangumiBot(
      * 发送消息并返回消息 ID，用于后续编辑
      */
     private fun sendMessageAndGetId(chatId: Long, text: String): Int {
-        return try {
-            val message = SendMessage.builder()
-                .chatId(chatId)
-                .text(text)
-                .build()
-            telegramClient.execute(message).messageId
-        } catch (e: Exception) {
-            log.error("发送消息失败: {}", e.message, e)
-            -1
-        }
+        val message = SendMessage.builder()
+            .chatId(chatId)
+            .text(text)
+            .build()
+        return telegramClient.execute(message).messageId
     }
 
     /**
      * 编辑已发送的消息
      */
     private fun editMessage(chatId: Long, messageId: Int, text: String) {
-        if (messageId < 0) {
-            // 消息发送失败，改为发送新消息
-            sendMessage(chatId, text)
-            return
-        }
         try {
             val edit = EditMessageText.builder()
                 .chatId(chatId)

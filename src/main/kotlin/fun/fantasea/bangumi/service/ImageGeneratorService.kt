@@ -60,15 +60,17 @@ class ImageGeneratorService(
 
     /**
      * 生成通知卡片图片
+     * @param airTimeDisplay 播出时间显示，如 "今天 16:35"，为 null 时不显示
      */
     fun generateNotificationCard(
         animeName: String,
         episodeText: String,
         episodeName: String? = null,
+        airTimeDisplay: String? = null,
         coverUrl: String? = null,
         platforms: List<PlatformInfo> = emptyList()
     ): ByteArray {
-        log.debug("生成通知图片: anime={}, episode={}", animeName, episodeText)
+        log.debug("生成通知图片: anime={}, episode={}, airTime={}", animeName, episodeText, airTimeDisplay)
 
         val image = BufferedImage(CARD_WIDTH, CARD_HEIGHT, BufferedImage.TYPE_INT_ARGB)
         val g2d = image.createGraphics()
@@ -83,7 +85,7 @@ class ImageGeneratorService(
             drawOverlay(g2d)
 
             // 绘制内容
-            drawContent(g2d, animeName, episodeText, episodeName, platforms)
+            drawContent(g2d, animeName, episodeText, episodeName, airTimeDisplay, platforms)
 
         } finally {
             g2d.dispose()
@@ -176,6 +178,7 @@ class ImageGeneratorService(
         animeName: String,
         episodeText: String,
         episodeName: String?,
+        airTimeDisplay: String?,
         platforms: List<PlatformInfo>
     ) {
         val leftMargin = 20
@@ -221,9 +224,10 @@ class ImageGeneratorService(
             g2d.drawString(displayPlatforms, leftMargin, CARD_HEIGHT - 35)
         }
 
-        // 时间
-        val timeText = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-        g2d.drawString(timeText, leftMargin, CARD_HEIGHT - 15)
+        // 时间：仅在有精确播出时间时显示
+        if (airTimeDisplay != null) {
+            g2d.drawString(airTimeDisplay, leftMargin, CARD_HEIGHT - 15)
+        }
     }
 
     /**

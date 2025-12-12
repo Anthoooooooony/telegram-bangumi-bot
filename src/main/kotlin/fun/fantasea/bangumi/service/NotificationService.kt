@@ -37,7 +37,8 @@ class NotificationService(
     ) {
         if (episodes.isEmpty()) return
 
-        val animeName = subscription.subjectNameCn?.takeIf { it.isNotBlank() } ?: subscription.subjectName
+        // 使用 Subscription 的便捷方法获取显示名称
+        val animeName = subscription.getDisplayName()
 
         // 生成集数显示文本
         val episodeText = if (episodes.size == 1) {
@@ -47,17 +48,19 @@ class NotificationService(
             "第 ${formatEpisodeRange(epNumbers)} 集"
         }
 
-        // 单集时显示剧集名
+        // 单集时显示剧集名和播出时间
         val episodeName = if (episodes.size == 1) episodes.first().name else null
+        val airTimeDisplay = if (episodes.size == 1) episodes.first().airTimeDisplay else null
 
-        log.info("发送新剧集通知: telegramId={}, anime={}, episodes={}",
-            telegramId, animeName, episodes.map { it.epNumber })
+        log.info("发送新剧集通知: telegramId={}, anime={}, episodes={}, airTime={}",
+            telegramId, animeName, episodes.map { it.epNumber }, airTimeDisplay)
 
-        // 获取封面图
-        val coverUrl = try {
+        // 获取封面图（优先从关联的 Anime 获取，回退到 API）
+        val coverUrl = subscription.getCoverUrl() ?: try {
             bangumiClient.getSubject(subscription.subjectId).images?.common
         } catch (e: Exception) {
-            throw RuntimeException("获取封面图失败: subjectId=${subscription.subjectId}", e)
+            log.warn("获取封面图失败: subjectId=${subscription.subjectId}, error={}", e.message)
+            null
         }
 
         // 获取播放平台
@@ -71,11 +74,12 @@ class NotificationService(
                 animeName = animeName,
                 episodeText = episodeText,
                 episodeName = episodeName,
+                airTimeDisplay = airTimeDisplay,
                 coverUrl = coverUrl,
                 platforms = platforms
             )
         } catch (e: Exception) {
-            throw RuntimeException("生成通知图片失败: subjectId=${subscription.subjectId}", e)
+            throw RuntimeException("生成通知图片失败: subjectId=${subscription.subjectId}", e) // todo 用一个项目自定义的exception，包含属性 userErrorMessage 来指定给用户报错的信息内容
         }
 
         // 生成播放链接作为图片 caption
@@ -207,6 +211,7 @@ data class TodayAnimeInfo(
  * 剧集信息（用于通知）
  */
 data class EpisodeInfo(
-    val epNumber: Int,      // 集数（使用 API 的 sort 字段，全局集数）
-    val name: String?       // 剧集名称
+    val epNumber: Int,           // 集数（使用 API 的 sort 字段，全局集数）
+    val name: String?,           // 剧集名称
+    val airTimeDisplay: String? = null  // 播出时间显示，如 "今天 16:35"
 )

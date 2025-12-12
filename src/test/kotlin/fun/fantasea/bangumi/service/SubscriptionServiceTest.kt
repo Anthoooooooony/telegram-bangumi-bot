@@ -1,8 +1,10 @@
 package `fun`.fantasea.bangumi.service
 
 import `fun`.fantasea.bangumi.client.*
+import `fun`.fantasea.bangumi.entity.Anime
 import `fun`.fantasea.bangumi.entity.Subscription
 import `fun`.fantasea.bangumi.entity.User
+import `fun`.fantasea.bangumi.repository.AnimeRepository
 import `fun`.fantasea.bangumi.repository.SubscriptionRepository
 import `fun`.fantasea.bangumi.repository.UserRepository
 import io.mockk.*
@@ -12,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.util.*
 
 /**
  * SubscriptionService 测试
@@ -25,10 +28,19 @@ class SubscriptionServiceTest {
     lateinit var userRepository: UserRepository
 
     @MockK
+    lateinit var animeRepository: AnimeRepository
+
+    @MockK
     lateinit var bangumiClient: BangumiClient
 
     @MockK
     lateinit var userService: UserService
+
+    @MockK
+    lateinit var animeService: AnimeService
+
+    @MockK
+    lateinit var scheduledNotificationService: ScheduledNotificationService
 
     @InjectMockKs
     lateinit var subscriptionService: SubscriptionService
@@ -64,6 +76,8 @@ class SubscriptionServiceTest {
                 )
             )
         )
+        val animeA = Anime(subjectId = 100, name = "Anime A", nameCn = "动画A", totalEpisodes = 12)
+        val animeB = Anime(subjectId = 200, name = "Anime B", nameCn = "动画B", totalEpisodes = 24)
 
         every { userRepository.findByTelegramId(123456789L) } returns testUser
         every { userService.getDecryptedToken(123456789L) } returns token
@@ -72,8 +86,12 @@ class SubscriptionServiceTest {
             total = 0,
             data = emptyList()
         )
+        coEvery { animeService.getOrCreateAnime(100) } returns animeA
+        coEvery { animeService.getOrCreateAnime(200) } returns animeB
+        every { animeService.isEpisodeAired(any(), any(), any()) } returns false
         every { subscriptionRepository.findByUserAndSubjectId(testUser, any()) } returns null
         every { subscriptionRepository.save(any()) } answers { firstArg() }
+        every { scheduledNotificationService.scheduleNextNotification(any()) } just Runs
 
         // when
         val result = subscriptionService.syncSubscriptions(123456789L)
@@ -132,6 +150,7 @@ class SubscriptionServiceTest {
     fun `should update subscription when already exists`() = runBlocking {
         // given
         val token = "decrypted-token"
+        val anime = Anime(subjectId = 100, name = "New Name", nameCn = "新名称", totalEpisodes = 12)
         val existingSubscription = Subscription(
             id = 1L,
             user = testUser,
@@ -152,6 +171,7 @@ class SubscriptionServiceTest {
         every { userRepository.findByTelegramId(123456789L) } returns testUser
         every { userService.getDecryptedToken(123456789L) } returns token
         coEvery { bangumiClient.getUserCollections("bgmuser", token) } returns collectionResponse
+        coEvery { animeService.getOrCreateAnime(100) } returns anime
         every { subscriptionRepository.findByUserAndSubjectId(testUser, 100) } returns existingSubscription
         every { subscriptionRepository.save(any()) } answers { firstArg() }
 

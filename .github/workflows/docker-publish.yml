@@ -15,6 +15,11 @@ on:
     tags:
       - 'v*'
 
+# 每个分支独立的并发控制，新提交取消该分支正在进行的构建
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   DOCKERHUB_REPO: anthooooony/telegram-bangumi-bot
 

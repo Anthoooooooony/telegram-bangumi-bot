@@ -1,7 +1,7 @@
 # Docker 镜像构建和推送
 #
 # 触发条件:
-#   - 推送到任意分支: 构建以分支名为标签的镜像
+#   - 推送到 dev 分支: 构建 dev 镜像
 #   - 推送 v* 标签: 构建 v* + latest 镜像
 #
 # 构建多平台镜像 (linux/amd64, linux/arm64) 并推送到 DockerHub
@@ -11,7 +11,7 @@ name: Build and Push Docker Image
 on:
   push:
     branches:
-      - '**'
+      - dev
     tags:
       - 'v*'
 
@@ -33,7 +33,7 @@ jobs:
 
       # 根据触发来源决定镜像标签
       # - v* 标签: 使用版本号 + latest
-      # - 分支: 使用分支名 (/ 替换为 -)
+      # - dev 分支: 使用 dev
       - name: Determine tags
         id: tags
         run: |
@@ -41,10 +41,7 @@ jobs:
             VERSION="${GITHUB_REF#refs/tags/}"
             echo "TAGS=${{ env.DOCKERHUB_REPO }}:${VERSION},${{ env.DOCKERHUB_REPO }}:latest" >> $GITHUB_OUTPUT
           else
-            BRANCH="${GITHUB_REF#refs/heads/}"
-            # 替换 / 为 - 以符合 Docker 标签规范
-            BRANCH_TAG="${BRANCH//\//-}"
-            echo "TAGS=${{ env.DOCKERHUB_REPO }}:${BRANCH_TAG}" >> $GITHUB_OUTPUT
+            echo "TAGS=${{ env.DOCKERHUB_REPO }}:dev" >> $GITHUB_OUTPUT
           fi
 
       # 设置 QEMU 用于多平台构建

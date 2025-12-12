@@ -4,6 +4,7 @@ import `fun`.fantasea.bangumi.entity.Anime
 import `fun`.fantasea.bangumi.entity.Subscription
 import `fun`.fantasea.bangumi.repository.SubscriptionRepository
 import jakarta.annotation.PreDestroy
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Lazy
 import org.springframework.scheduling.TaskScheduler
 import org.springframework.stereotype.Service
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledFuture
@@ -25,6 +27,7 @@ import java.util.concurrent.ScheduledFuture
 class ScheduledNotificationService(
     private val taskScheduler: TaskScheduler,
     private val subscriptionRepository: SubscriptionRepository,
+    private val transactionTemplate: TransactionTemplate,
     @param:Lazy private val notificationService: NotificationService,
     private val animeService: AnimeService
 ) {
@@ -33,8 +36,13 @@ class ScheduledNotificationService(
     // 存储订阅 ID -> ScheduledFuture 的映射，用于取消任务
     private val scheduledTasks = ConcurrentHashMap<Long, ScheduledFuture<*>>()
 
+    // 协程异常处理器，作为最后一道防线
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        log.error("协程未捕获异常: {}", throwable.message, throwable)
+    }
+
     // 使用 SupervisorJob 防止单个任务失败影响其他任务
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + exceptionHandler)
 
     @PreDestroy
     fun shutdown() {
@@ -202,15 +210,15 @@ class ScheduledNotificationService(
                 return
             }
 
-            // 通知成功后更新数据库
-            subscription.lastNotifiedEp = nextEp
-            subscription.latestAiredEp = nextEp
-
-            // 清除当前调度信息
+            // 通知成功后更新数据库（使用事务确保原子性）
             scheduledTasks.remove(subscriptionId)
-            subscription.nextNotifyTime = null
-            subscription.nextNotifyEp = null
-            subscriptionRepository.save(subscription)
+            transactionTemplate.execute {
+                subscription.lastNotifiedEp = nextEp
+                subscription.latestAiredEp = nextEp
+                subscription.nextNotifyTime = null
+                subscription.nextNotifyEp = null
+                subscriptionRepository.save(subscription)
+            }
 
             // 安排下一集通知
             scheduleNextNotification(subscription)

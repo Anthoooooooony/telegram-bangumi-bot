@@ -9,8 +9,10 @@ import `fun`.fantasea.bangumi.service.SubscriptionAnime
 import `fun`.fantasea.bangumi.service.SubscriptionService
 import `fun`.fantasea.bangumi.service.UserService
 import jakarta.annotation.PostConstruct
+import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -94,6 +96,11 @@ class BangumiBot(
         } catch (e: Exception) {
             log.error("注册 Bot 命令失败: {}", e.message, e)
         }
+    }
+
+    @PreDestroy
+    fun cleanup() {
+        scope.cancel()
     }
 
     override fun consume(update: Update) {

@@ -4,6 +4,7 @@ import `fun`.fantasea.bangumi.client.BangumiClient
 import `fun`.fantasea.bangumi.repository.SubscriptionRepository
 import `fun`.fantasea.bangumi.repository.UserRepository
 import `fun`.fantasea.bangumi.repository.UserSpecifications
+import `fun`.fantasea.bangumi.service.AnimeService
 import `fun`.fantasea.bangumi.service.NotificationService
 import `fun`.fantasea.bangumi.service.TodayAnimeInfo
 import kotlinx.coroutines.runBlocking
@@ -27,6 +28,7 @@ class DailySummaryTask(
     private val subscriptionRepository: SubscriptionRepository,
     private val bangumiClient: BangumiClient,
     private val notificationService: NotificationService,
+    private val animeService: AnimeService,
     @param:Value("\${anime.timezone:Asia/Shanghai}") private val timezone: String
 ) {
     private val log = LoggerFactory.getLogger(DailySummaryTask::class.java)
@@ -87,7 +89,7 @@ class DailySummaryTask(
      * 发送汇总给用户
      * @param summaryTime 用户配置的汇总时间，用于计算 24h 时间窗口
      */
-    private suspend fun sendSummaryToUser(telegramId: Long, todayAiringIds: Set<Int>, summaryTime: LocalTime) { // todo 确定具体播送时间
+    private suspend fun sendSummaryToUser(telegramId: Long, todayAiringIds: Set<Int>, summaryTime: LocalTime) {
         // 获取用户的订阅
         val subscriptions = subscriptionRepository.findByUserTelegramId(telegramId)
 
@@ -121,7 +123,8 @@ class DailySummaryTask(
                 if (recentEpisode != null) {
                     hasRecentEpisode = true
                     val epNum = recentEpisode.sort.toInt()
-                    airInfo = "第 $epNum 集"
+                    val airTimeStr = sub.anime?.let { animeService.formatAirTime(it, epNum) }
+                    airInfo = if (airTimeStr != null) "第 $epNum 集 $airTimeStr" else "第 $epNum 集"
                 }
             } catch (e: Exception) {
                 log.debug("获取番剧信息失败: subjectId={}, error={}", sub.subjectId, e.message)

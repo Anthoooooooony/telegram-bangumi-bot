@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
@@ -115,7 +116,21 @@ class DailySummaryTask(
                 if (recentEpisode != null) {
                     hasRecentEpisode = true
                     val epNum = recentEpisode.ep?.toInt() ?: recentEpisode.sort.toInt()
-                    airInfo = "第 $epNum 集"
+
+                    // 格式化日期为 "M月d日"
+                    val dateStr = try {
+                        val date = LocalDate.parse(recentEpisode.airdate)
+                        val formatter = DateTimeFormatter.ofPattern("M月d日")
+                        date.format(formatter)
+                    } catch (e: Exception) {
+                        null
+                    }
+
+                    airInfo = if (dateStr != null) {
+                        "第 $epNum 集 · $dateStr"
+                    } else {
+                        "第 $epNum 集"
+                    }
                 }
             } catch (e: Exception) {
                 log.debug("获取番剧信息失败: subjectId={}, error={}", sub.subjectId, e.message)
